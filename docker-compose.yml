@@ -1,0 +1,52 @@
+# 로컬 개발용. 팀원 5명이 같은 환경에서 띄우기 위한 최소 구성이다.
+# Redis는 두지 않는다 (LLM 요약은 summary_cache 테이블로 충분하다).
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: townsignal
+      POSTGRES_PASSWORD: townsignal
+      POSTGRES_DB: townsignal
+      TZ: Asia/Seoul
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U townsignal"]
+      interval: 5s
+      retries: 5
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://townsignal:townsignal@db:5432/townsignal
+      APP_ENV: local
+      CORS_ORIGINS: http://localhost:5173
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./api:/app/api
+      - ./common:/app/common
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+
+  batch:
+    profiles: ["batch"]
+    build:
+      context: .
+      dockerfile: Dockerfile.batch
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://townsignal:townsignal@db:5432/townsignal
+    volumes:
+      - ./batch:/app/batch
+      - ./common:/app/common
+      - ./data:/app/data
+
+volumes:
+  db-data:

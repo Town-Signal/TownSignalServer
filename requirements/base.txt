@@ -1,0 +1,2 @@
+# api와 batch가 함께 쓰는 최소 의존성
+python-dotenv>=1.0,<2.0
