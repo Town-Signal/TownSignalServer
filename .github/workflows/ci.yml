@@ -1,4 +1,4 @@
-name: Backend CI
+name: CI
 
 on:
   push:
@@ -7,16 +7,24 @@ on:
     branches: [ main, develop ]
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
-          java-version: '21'
-          distribution: 'temurin'
+          python-version: '3.11'
+          cache: 'pip'
 
-      - name: Build with Gradle
-        run: ./gradlew build
+      # batch 의존성(xgboost · scikit-survival)은 설치가 무거워 CI에서 제외한다.
+      # common과 api 테스트만 돌리며, 배치 작업이 붙으면 별도 job으로 분리한다.
+      - name: Install dependencies
+        run: pip install -r requirements/dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Test
+        run: pytest -q
