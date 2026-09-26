@@ -1,41 +1,24 @@
-HELP.md
-.gradle
-build/
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
 
-### 민감 설정 (GitHub Secrets로 관리, 커밋 금지) ###
-application-dev.yml
-application-prod.yml
-!gradle/wrapper/gradle-wrapper.jar
-!**/src/main/**/build/
-!**/src/test/**/build/
+# 환경설정
+.env
 
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-bin/
-!**/src/main/**/bin/
-!**/src/test/**/bin/
+# 데이터 · 모델 산출물 (용량이 커서 저장소에 올리지 않는다)
+data/raw/
+data/processed/
+*.pkl
+*.joblib
+*.csv
+!data/seed/*.csv
 
-### IntelliJ IDEA ###
-.idea
-*.iws
-*.iml
-*.ipr
-out/
-!**/src/main/**/out/
-!**/src/test/**/out/
-
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-
-### VS Code ###
+# 에디터
+.idea/
 .vscode/
+.DS_Store

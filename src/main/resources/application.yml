@@ -1,5 +1,0 @@
-spring:
-  application:
-    name: TownSignalBE
-  profiles:
-    active: dev
