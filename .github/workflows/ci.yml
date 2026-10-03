@@ -9,6 +9,27 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+
+    # DB 테스트용 PostgreSQL 16. 로컬 docker compose의 db와 같은 계정 · DB 이름을 쓴다.
+    # CI에서는 DB에 붙지 못하면 테스트가 skip이 아니라 실패한다(tests/conftest.py).
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: townsignal
+          POSTGRES_PASSWORD: townsignal
+          POSTGRES_DB: townsignal
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U townsignal"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+psycopg://townsignal:townsignal@localhost:5432/townsignal
+
     steps:
       - uses: actions/checkout@v4
 
@@ -25,6 +46,9 @@ jobs:
 
       - name: Lint
         run: ruff check .
+
+      - name: Apply schema
+        run: psql postgresql://townsignal:townsignal@localhost:5432/townsignal -v ON_ERROR_STOP=1 -f db/schema.sql
 
       - name: Test
         run: pytest -q
