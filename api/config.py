@@ -9,3 +9,6 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg://townsignal:townsignal@localhost:5432/townsignal")
 APP_ENV = os.getenv("APP_ENV", "local")
 CORS_ORIGINS = [o for o in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",") if o]
+
+# 관리자 API(X-Admin-Token) 검증값. 비어 있으면 관리자 API는 모두 401이다
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
