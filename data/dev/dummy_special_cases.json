@@ -1,0 +1,46 @@
+{
+  "_note": "더미 데이터 — 필수 경우(CLAUDE.md 5절)를 어느 행정동 · 업종 조합에 둘지 정한다. 동은 dong_code(더미)로, 업종은 industry_code로 적는다. 숫자 값은 batch/dev/fixtures.py가 결정적으로 생성한다.",
+  "quarters": ["20233", "20234", "20241", "20242", "20243", "20244", "20251", "20252"],
+  "serving_model_version": "xgb_v1",
+  "extra_model": {"model_version": "mlp_v1", "industries": ["CS100001"]},
+  "no_store_dongs": {
+    "case": "점포 · 매출 · 예측 모두 없는 동(직접 찾아보기 '데이터 없음' + 가까운 동 안내)",
+    "dongs": ["11110901"]
+  },
+  "no_prediction_dongs": {
+    "case": "점포는 있지만 매출 · 예측이 없는 동(모든 업종 '예측 불가')",
+    "dongs": ["11230901"]
+  },
+  "no_prediction_combos": {
+    "case": "점포는 있지만 매출 · 예측이 없는 조합",
+    "combos": [["11530901", "CS200002"], ["11260902", "CS300001"], ["11380901", "CS100008"]]
+  },
+  "sample_short_dongs": {
+    "case": "최근 4개 분기 평균 점포 수 < 5(표본 부족) — 예측은 있음, 모든 업종",
+    "dongs": ["11320901"]
+  },
+  "sample_short_combos": {
+    "case": "표본 부족 조합",
+    "combos": [["11350901", "CS200002"]]
+  },
+  "growth_null_industries": {
+    "case": "growth_rate NULL — 업종 전체(종합점수 매출 50 · 생존 50으로 재배분)",
+    "industries": ["CS200002"]
+  },
+  "growth_null_dongs": {
+    "case": "growth_rate NULL — 동 전체",
+    "dongs": ["11440903"]
+  },
+  "growth_low_dongs": {
+    "case": "growth_confidence '낮음'",
+    "dongs": ["11545901", "11320901"]
+  },
+  "summary_industries": {
+    "case": "summary_cache를 만드는 업종(그 밖의 업종은 요약 없음 → ⑬ null)",
+    "industries": ["CS100001"]
+  },
+  "summary_missing_dongs": {
+    "case": "요약 업종이어도 요약을 비워 두는 동",
+    "dongs": ["11620901", "11620902"]
+  }
+}

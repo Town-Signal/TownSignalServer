@@ -1,0 +1,12 @@
+{
+  "_note": "더미 데이터 — 실제 데이터 아님. 업종 코드 체계는 서울시 상권분석서비스(CS######)를 따랐지만 목록 · 대분류 정본은 data/seed/industry_categories.csv(사람이 작성)다.",
+  "industries": [
+    {"industry_code": "CS100001", "name": "한식음식점", "category": "외식업"},
+    {"industry_code": "CS100010", "name": "커피-음료", "category": "외식업"},
+    {"industry_code": "CS100008", "name": "분식전문점", "category": "외식업"},
+    {"industry_code": "CS200001", "name": "일반교습학원", "category": "서비스업"},
+    {"industry_code": "CS200002", "name": "외국어학원", "category": "서비스업"},
+    {"industry_code": "CS300001", "name": "슈퍼마켓", "category": "소매업"},
+    {"industry_code": "CS300002", "name": "편의점", "category": "소매업"}
+  ]
+}

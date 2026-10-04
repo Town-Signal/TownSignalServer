@@ -193,6 +193,7 @@ def test_indexes_match(catalog, table_name):
 
 # 실제 코드와 겹치지 않는 시험용 코드. 트랜잭션은 테스트가 끝나면 롤백된다
 GU, GU_NO_RENT, DONG, IND = "99001", "99002", "99001001", "CS999001"
+VERIFY_FIELD = "test_only_field"  # 개발 DB에 이미 있는 검증 기록(age 등)과 섞이지 않게
 ELIGIBILITY = {
     "and": [
         {"field": "age", "op": "<=", "value": 39},
@@ -282,8 +283,8 @@ def test_round_trip_programs_and_view(db_session):
     s.flush()
     s.add_all(
         [
-            ProgramVerification(program_id=program.program_id, field_name="age", is_match=True),
-            ProgramVerification(program_id=program.program_id, field_name="age", is_match=False),
+            ProgramVerification(program_id=program.program_id, field_name=VERIFY_FIELD, is_match=True),
+            ProgramVerification(program_id=program.program_id, field_name=VERIFY_FIELD, is_match=False),
         ]
     )
     s.commit()
@@ -295,7 +296,7 @@ def test_round_trip_programs_and_view(db_session):
     assert (got.is_exclusive, got.verified_by) == (False, None)
     assert got.district_code == GU
     row = s.execute(
-        select(v_extraction_accuracy).where(v_extraction_accuracy.c.field_name == "age")
+        select(v_extraction_accuracy).where(v_extraction_accuracy.c.field_name == VERIFY_FIELD)
     ).one()
     assert (row.checked_n, row.accuracy_pct) == (2, Decimal("50.0"))
 

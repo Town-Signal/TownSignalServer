@@ -1,0 +1,329 @@
+{
+  "_note": "더미 데이터 — 실제 데이터 아님. 로컬 개발 · 테스트 전용(batch.jobs.load_dev_fixtures). data/seed/에 두지 않는다. dong_code는 '{구코드}9{nn}' 형식의 더미 코드다(6번째 자리 9). 이름 · geo_code는 TownSignalFE public/geo(2013)와 맞췄다. 위례동은 2015년 신설이라 2013 경계가 없어 geo_code가 null.",
+  "dongs": [
+    {
+      "dong_code": "11110901",
+      "name": "청운효자동",
+      "district_code": "11110",
+      "geo_code": "1101072"
+    },
+    {
+      "dong_code": "11110902",
+      "name": "사직동",
+      "district_code": "11110",
+      "geo_code": "1101053"
+    },
+    {
+      "dong_code": "11140901",
+      "name": "명동",
+      "district_code": "11140",
+      "geo_code": "1102055"
+    },
+    {
+      "dong_code": "11140902",
+      "name": "회현동",
+      "district_code": "11140",
+      "geo_code": "1102054"
+    },
+    {
+      "dong_code": "11170901",
+      "name": "이태원1동",
+      "district_code": "11170",
+      "geo_code": "1103065"
+    },
+    {
+      "dong_code": "11170902",
+      "name": "후암동",
+      "district_code": "11170",
+      "geo_code": "1103051"
+    },
+    {
+      "dong_code": "11200901",
+      "name": "성수1가2동",
+      "district_code": "11200",
+      "geo_code": "1104066"
+    },
+    {
+      "dong_code": "11200902",
+      "name": "왕십리2동",
+      "district_code": "11200",
+      "geo_code": "1104052"
+    },
+    {
+      "dong_code": "11215901",
+      "name": "화양동",
+      "district_code": "11215",
+      "geo_code": "1105053"
+    },
+    {
+      "dong_code": "11215902",
+      "name": "군자동",
+      "district_code": "11215",
+      "geo_code": "1105054"
+    },
+    {
+      "dong_code": "11230901",
+      "name": "회기동",
+      "district_code": "11230",
+      "geo_code": "1106071"
+    },
+    {
+      "dong_code": "11230902",
+      "name": "청량리동",
+      "district_code": "11230",
+      "geo_code": "1106080"
+    },
+    {
+      "dong_code": "11260901",
+      "name": "면목2동",
+      "district_code": "11260",
+      "geo_code": "1107052"
+    },
+    {
+      "dong_code": "11260902",
+      "name": "상봉1동",
+      "district_code": "11260",
+      "geo_code": "1107059"
+    },
+    {
+      "dong_code": "11290901",
+      "name": "안암동",
+      "district_code": "11290",
+      "geo_code": "1108060"
+    },
+    {
+      "dong_code": "11290902",
+      "name": "돈암1동",
+      "district_code": "11290",
+      "geo_code": "1108058"
+    },
+    {
+      "dong_code": "11305901",
+      "name": "미아동",
+      "district_code": "11305",
+      "geo_code": "1109070"
+    },
+    {
+      "dong_code": "11305902",
+      "name": "수유1동",
+      "district_code": "11305",
+      "geo_code": "1109063"
+    },
+    {
+      "dong_code": "11320901",
+      "name": "방학3동",
+      "district_code": "11320",
+      "geo_code": "1110057"
+    },
+    {
+      "dong_code": "11320902",
+      "name": "쌍문1동",
+      "district_code": "11320",
+      "geo_code": "1110051"
+    },
+    {
+      "dong_code": "11350901",
+      "name": "공릉2동",
+      "district_code": "11350",
+      "geo_code": "1111056"
+    },
+    {
+      "dong_code": "11350902",
+      "name": "월계1동",
+      "district_code": "11350",
+      "geo_code": "1111051"
+    },
+    {
+      "dong_code": "11380901",
+      "name": "녹번동",
+      "district_code": "11380",
+      "geo_code": "1112051"
+    },
+    {
+      "dong_code": "11380902",
+      "name": "불광1동",
+      "district_code": "11380",
+      "geo_code": "1112052"
+    },
+    {
+      "dong_code": "11410901",
+      "name": "천연동",
+      "district_code": "11410",
+      "geo_code": "1113052"
+    },
+    {
+      "dong_code": "11410902",
+      "name": "홍제1동",
+      "district_code": "11410",
+      "geo_code": "1113062"
+    },
+    {
+      "dong_code": "11440901",
+      "name": "서교동",
+      "district_code": "11440",
+      "geo_code": "1114066"
+    },
+    {
+      "dong_code": "11440902",
+      "name": "연남동",
+      "district_code": "11440",
+      "geo_code": "1114071"
+    },
+    {
+      "dong_code": "11440903",
+      "name": "망원1동",
+      "district_code": "11440",
+      "geo_code": "1114069"
+    },
+    {
+      "dong_code": "11470901",
+      "name": "목1동",
+      "district_code": "11470",
+      "geo_code": "1115051"
+    },
+    {
+      "dong_code": "11470902",
+      "name": "신월1동",
+      "district_code": "11470",
+      "geo_code": "1115057"
+    },
+    {
+      "dong_code": "11500901",
+      "name": "화곡1동",
+      "district_code": "11500",
+      "geo_code": "1116073"
+    },
+    {
+      "dong_code": "11500902",
+      "name": "염창동",
+      "district_code": "11500",
+      "geo_code": "1116051"
+    },
+    {
+      "dong_code": "11530901",
+      "name": "구로3동",
+      "district_code": "11530",
+      "geo_code": "1117054"
+    },
+    {
+      "dong_code": "11530902",
+      "name": "신도림동",
+      "district_code": "11530",
+      "geo_code": "1117051"
+    },
+    {
+      "dong_code": "11545901",
+      "name": "가산동",
+      "district_code": "11545",
+      "geo_code": "1118051"
+    },
+    {
+      "dong_code": "11545902",
+      "name": "독산1동",
+      "district_code": "11545",
+      "geo_code": "1118052"
+    },
+    {
+      "dong_code": "11560901",
+      "name": "문래동",
+      "district_code": "11560",
+      "geo_code": "1119076"
+    },
+    {
+      "dong_code": "11560902",
+      "name": "여의동",
+      "district_code": "11560",
+      "geo_code": "1119054"
+    },
+    {
+      "dong_code": "11590901",
+      "name": "상도1동",
+      "district_code": "11590",
+      "geo_code": "1120053"
+    },
+    {
+      "dong_code": "11590902",
+      "name": "노량진2동",
+      "district_code": "11590",
+      "geo_code": "1120052"
+    },
+    {
+      "dong_code": "11620901",
+      "name": "신림동",
+      "district_code": "11620",
+      "geo_code": "1121069"
+    },
+    {
+      "dong_code": "11620902",
+      "name": "낙성대동",
+      "district_code": "11620",
+      "geo_code": "1121058"
+    },
+    {
+      "dong_code": "11620903",
+      "name": "신사동",
+      "district_code": "11620",
+      "geo_code": "1121068"
+    },
+    {
+      "dong_code": "11650901",
+      "name": "서초1동",
+      "district_code": "11650",
+      "geo_code": "1122051"
+    },
+    {
+      "dong_code": "11650902",
+      "name": "잠원동",
+      "district_code": "11650",
+      "geo_code": "1122055"
+    },
+    {
+      "dong_code": "11680901",
+      "name": "역삼1동",
+      "district_code": "11680",
+      "geo_code": "1123064"
+    },
+    {
+      "dong_code": "11680902",
+      "name": "신사동",
+      "district_code": "11680",
+      "geo_code": "1123051"
+    },
+    {
+      "dong_code": "11680903",
+      "name": "삼성1동",
+      "district_code": "11680",
+      "geo_code": "1123058"
+    },
+    {
+      "dong_code": "11710901",
+      "name": "풍납1동",
+      "district_code": "11710",
+      "geo_code": "1124051"
+    },
+    {
+      "dong_code": "11710902",
+      "name": "거여1동",
+      "district_code": "11710",
+      "geo_code": "1124053"
+    },
+    {
+      "dong_code": "11710903",
+      "name": "위례동",
+      "district_code": "11710",
+      "geo_code": null
+    },
+    {
+      "dong_code": "11740901",
+      "name": "고덕1동",
+      "district_code": "11740",
+      "geo_code": "1125055"
+    },
+    {
+      "dong_code": "11740902",
+      "name": "명일1동",
+      "district_code": "11740",
+      "geo_code": "1125053"
+    }
+  ]
+}

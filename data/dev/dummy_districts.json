@@ -1,0 +1,130 @@
+{
+  "_note": "더미 데이터 — 실제 데이터 아님. 로컬 개발 · 테스트 전용(batch.jobs.load_dev_fixtures). data/seed/에 두지 않는다.",
+  "districts": [
+    {
+      "district_code": "11110",
+      "name": "종로구",
+      "geo_code": "11010"
+    },
+    {
+      "district_code": "11140",
+      "name": "중구",
+      "geo_code": "11020"
+    },
+    {
+      "district_code": "11170",
+      "name": "용산구",
+      "geo_code": "11030"
+    },
+    {
+      "district_code": "11200",
+      "name": "성동구",
+      "geo_code": "11040"
+    },
+    {
+      "district_code": "11215",
+      "name": "광진구",
+      "geo_code": "11050"
+    },
+    {
+      "district_code": "11230",
+      "name": "동대문구",
+      "geo_code": "11060"
+    },
+    {
+      "district_code": "11260",
+      "name": "중랑구",
+      "geo_code": "11070"
+    },
+    {
+      "district_code": "11290",
+      "name": "성북구",
+      "geo_code": "11080"
+    },
+    {
+      "district_code": "11305",
+      "name": "강북구",
+      "geo_code": "11090"
+    },
+    {
+      "district_code": "11320",
+      "name": "도봉구",
+      "geo_code": "11100"
+    },
+    {
+      "district_code": "11350",
+      "name": "노원구",
+      "geo_code": "11110"
+    },
+    {
+      "district_code": "11380",
+      "name": "은평구",
+      "geo_code": "11120"
+    },
+    {
+      "district_code": "11410",
+      "name": "서대문구",
+      "geo_code": "11130"
+    },
+    {
+      "district_code": "11440",
+      "name": "마포구",
+      "geo_code": "11140"
+    },
+    {
+      "district_code": "11470",
+      "name": "양천구",
+      "geo_code": "11150"
+    },
+    {
+      "district_code": "11500",
+      "name": "강서구",
+      "geo_code": "11160"
+    },
+    {
+      "district_code": "11530",
+      "name": "구로구",
+      "geo_code": "11170"
+    },
+    {
+      "district_code": "11545",
+      "name": "금천구",
+      "geo_code": "11180"
+    },
+    {
+      "district_code": "11560",
+      "name": "영등포구",
+      "geo_code": "11190"
+    },
+    {
+      "district_code": "11590",
+      "name": "동작구",
+      "geo_code": "11200"
+    },
+    {
+      "district_code": "11620",
+      "name": "관악구",
+      "geo_code": "11210"
+    },
+    {
+      "district_code": "11650",
+      "name": "서초구",
+      "geo_code": "11220"
+    },
+    {
+      "district_code": "11680",
+      "name": "강남구",
+      "geo_code": "11230"
+    },
+    {
+      "district_code": "11710",
+      "name": "송파구",
+      "geo_code": "11240"
+    },
+    {
+      "district_code": "11740",
+      "name": "강동구",
+      "geo_code": "11250"
+    }
+  ]
+}

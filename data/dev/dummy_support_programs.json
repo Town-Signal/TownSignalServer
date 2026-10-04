@@ -1,0 +1,161 @@
+{
+  "_note": "더미 데이터 — 실제 지원사업 공고 아님. 이름은 모두 '[더미]'로 시작한다. 배열 순서대로 적재해 program_id가 1부터 매겨진다(로더가 TRUNCATE … RESTART IDENTITY 후 넣음). 각 행이 어떤 필수 경우인지는 case에 적었다.",
+  "programs": [
+    {
+      "key": "national_exclusive_a",
+      "case": "전국 배타 사업 1 — 금액이 큰 쪽(2,000만)",
+      "name": "[더미] 청년창업 정착지원금 A",
+      "agency": "더미 기관(중앙)",
+      "amount_max": 20000000,
+      "district_code": null,
+      "is_exclusive": true,
+      "apply_start": "2026-09-01",
+      "apply_end": "2026-10-24",
+      "eligibility": {"and": [{"field": "age", "op": "<=", "value": 39}]},
+      "verified_by": "더미검수자"
+    },
+    {
+      "key": "national_exclusive_b",
+      "case": "전국 배타 사업 2 — 금액이 작아 A와 함께 매칭되면 제외(700만)",
+      "name": "[더미] 청년창업 초기자금 B",
+      "agency": "더미 기관(중앙)",
+      "amount_max": 7000000,
+      "district_code": null,
+      "is_exclusive": true,
+      "apply_start": "2026-09-15",
+      "apply_end": "2026-10-10",
+      "eligibility": {"and": [{"field": "age", "op": "<=", "value": 39}]},
+      "verified_by": "더미검수자"
+    },
+    {
+      "key": "national_shared_capability",
+      "case": "전국 비배타 사업 · 상시 공고(apply_end null) · 경력 또는 자격증 조건",
+      "name": "[더미] 창업 역량 지원금",
+      "agency": "더미 기관(중앙)",
+      "amount_max": 3000000,
+      "district_code": null,
+      "is_exclusive": false,
+      "apply_start": "2026-01-01",
+      "apply_end": null,
+      "eligibility": {"or": [
+        {"field": "career_years", "op": ">=", "value": 2},
+        {"field": "certificates", "op": "contains_any", "value": ["조리기능사", "제과기능사"]}
+      ]},
+      "verified_by": "더미검수자"
+    },
+    {
+      "key": "national_shared_closed",
+      "case": "전국 비배타 사업 · 이미 마감된 공고(마감 공고도 매칭, 7.3) · 조건 없음",
+      "name": "[더미] 소상공인 교육 바우처",
+      "agency": "더미 기관(중앙)",
+      "amount_max": 1000000,
+      "district_code": null,
+      "is_exclusive": false,
+      "apply_start": "2025-11-01",
+      "apply_end": "2025-12-31",
+      "eligibility": {"and": []},
+      "verified_by": "더미검수자"
+    },
+    {
+      "key": "gwanak_shared",
+      "case": "구 전용(관악구) 비배타 사업",
+      "name": "[더미] 관악구 청년 창업 초기자금",
+      "agency": "더미 기관(관악구청)",
+      "amount_max": 8000000,
+      "district_code": "11620",
+      "is_exclusive": false,
+      "apply_start": "2026-09-20",
+      "apply_end": "2026-10-06",
+      "eligibility": {"and": [{"field": "age", "op": "<=", "value": 39}]},
+      "verified_by": "더미검수자"
+    },
+    {
+      "key": "mapo_exclusive_bigger",
+      "case": "구 전용(마포구) 배타 사업 — 전국 A보다 커서 마포구에서는 A · B가 제외됨",
+      "name": "[더미] 마포구 청년 가게 지원",
+      "agency": "더미 기관(마포구청)",
+      "amount_max": 25000000,
+      "district_code": "11440",
+      "is_exclusive": true,
+      "apply_start": "2026-10-01",
+      "apply_end": "2026-11-14",
+      "eligibility": {"and": [{"field": "age", "op": "<=", "value": 39}]},
+      "verified_by": "더미검수자"
+    },
+    {
+      "key": "geumcheon_shared_food",
+      "case": "구 전용(금천구) 비배타 사업 — 외식업만",
+      "name": "[더미] 금천구 G밸리 외식 창업 지원",
+      "agency": "더미 기관(금천구청)",
+      "amount_max": 9000000,
+      "district_code": "11545",
+      "is_exclusive": false,
+      "apply_start": "2026-10-01",
+      "apply_end": "2026-11-08",
+      "eligibility": {"and": [{"field": "industry_category", "op": "==", "value": "외식업"}]},
+      "verified_by": "더미검수자"
+    },
+    {
+      "key": "seongdong_shared_young",
+      "case": "구 전용(성동구) 비배타 사업 — 34세 이하",
+      "name": "[더미] 성동구 창업공간 임대료 지원",
+      "agency": "더미 기관(성동구청)",
+      "amount_max": 6000000,
+      "district_code": "11200",
+      "is_exclusive": false,
+      "apply_start": "2026-09-25",
+      "apply_end": "2026-10-15",
+      "eligibility": {"and": [{"field": "age", "op": "<=", "value": 34}]},
+      "verified_by": "더미검수자"
+    },
+    {
+      "key": "gangnam_exclusive_tie",
+      "case": "구 전용(강남구) 배타 사업 — 전국 A와 금액 동률, program_id가 작은 A가 선택되고 이것은 제외",
+      "name": "[더미] 강남구 창업 성장 지원",
+      "agency": "더미 기관(강남구청)",
+      "amount_max": 20000000,
+      "district_code": "11680",
+      "is_exclusive": true,
+      "apply_start": "2026-10-01",
+      "apply_end": "2026-10-31",
+      "eligibility": {"and": [{"field": "age", "op": "<=", "value": 39}]},
+      "verified_by": "더미검수자"
+    },
+    {
+      "key": "unverified_large",
+      "case": "미검수 공고(verified_by null) — 어떤 구에서도 매칭되지 않아야 함",
+      "name": "[더미 · 미검수] 대형 창업 지원사업",
+      "agency": "더미 기관(중앙)",
+      "amount_max": 50000000,
+      "district_code": null,
+      "is_exclusive": false,
+      "apply_start": "2026-10-01",
+      "apply_end": "2026-12-31",
+      "eligibility": {"and": []},
+      "verified_by": null
+    },
+    {
+      "key": "national_shared_over40",
+      "case": "전국 비배타 사업 — 40세 이상만(39세 초과 입력 확인용)",
+      "name": "[더미] 중장년 재창업 지원금",
+      "agency": "더미 기관(중앙)",
+      "amount_max": 5000000,
+      "district_code": null,
+      "is_exclusive": false,
+      "apply_start": "2026-08-01",
+      "apply_end": "2026-12-15",
+      "eligibility": {"and": [{"field": "age", "op": ">=", "value": 40}]},
+      "verified_by": "더미검수자"
+    }
+  ],
+  "verifications": [
+    {"program": "national_exclusive_a", "field_name": "age", "extracted_value": "39", "actual_value": "39", "is_match": true},
+    {"program": "national_exclusive_b", "field_name": "age", "extracted_value": "39", "actual_value": "39", "is_match": true},
+    {"program": "gwanak_shared", "field_name": "age", "extracted_value": "39", "actual_value": "39", "is_match": true},
+    {"program": "national_exclusive_a", "field_name": "amount", "extracted_value": "20000000", "actual_value": "20000000", "is_match": true},
+    {"program": "national_exclusive_b", "field_name": "amount", "extracted_value": "7000000", "actual_value": "7000000", "is_match": true},
+    {"program": "mapo_exclusive_bigger", "field_name": "amount", "extracted_value": "20000000", "actual_value": "25000000", "is_match": false},
+    {"program": "gwanak_shared", "field_name": "district", "extracted_value": "관악구", "actual_value": "관악구", "is_match": true},
+    {"program": "geumcheon_shared_food", "field_name": "district", "extracted_value": "구로구", "actual_value": "금천구", "is_match": false}
+  ]
+}
