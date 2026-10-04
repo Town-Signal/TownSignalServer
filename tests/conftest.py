@@ -12,11 +12,14 @@ import os
 from collections.abc import Iterator
 
 import pytest
-from sqlalchemy import Engine, text
+from fastapi.testclient import TestClient
+from sqlalchemy import Connection, Engine, create_engine, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
-from api.db import engine
+from api.db import engine, get_session
+from api.main import create_app
+from batch.jobs.load_dev_fixtures import load
 
 
 @pytest.fixture(scope="session")
@@ -44,3 +47,58 @@ def db_session(db_engine: Engine) -> Iterator[Session]:
         session.close()
         trans.rollback()
         conn.close()
+
+
+# ── API 테스트 ───────────────────────────────────────────────
+
+
+@pytest.fixture(scope="module")
+def dummy_db(db_engine: Engine) -> Iterator[Connection]:
+    """모듈 하나 동안 쓰는 연결. 트랜잭션 안에서 더미(data/dev)를 적재하고 모듈이 끝나면 롤백한다.
+
+    로컬 DB에 무엇이 있든(비어 있든 더미가 있든) 같은 데이터로 테스트한다. CI의 빈 DB에서도 그대로 돈다.
+    """
+    conn = db_engine.connect()
+    trans = conn.begin()
+    load(conn, app_env="local", force=True)
+    try:
+        yield conn
+    finally:
+        trans.rollback()
+        conn.close()
+
+
+@pytest.fixture
+def api_client(dummy_db: Connection) -> TestClient:
+    """get_session을 더미가 적재된 연결의 SAVEPOINT 세션으로 바꾼 TestClient."""
+    app = create_app()
+
+    def session_on_dummy() -> Iterator[Session]:
+        session = Session(bind=dummy_db, join_transaction_mode="create_savepoint")
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_session] = session_on_dummy
+    return TestClient(app)
+
+
+@pytest.fixture
+def dead_db_client() -> Iterator[TestClient]:
+    """DB에 접속할 수 없는 상황. 닫힌 포트를 가리키는 엔진의 세션을 주입한다(DB가 없어도 돈다)."""
+    dead_engine = create_engine(
+        "postgresql+psycopg://nobody:nothing@127.0.0.1:1/nowhere", connect_args={"connect_timeout": 1}
+    )
+    app = create_app()
+
+    def session_on_dead_db() -> Iterator[Session]:
+        session = Session(bind=dead_engine)
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_session] = session_on_dead_db
+    yield TestClient(app, raise_server_exceptions=False)
+    dead_engine.dispose()

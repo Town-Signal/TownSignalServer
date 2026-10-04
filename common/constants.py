@@ -25,6 +25,9 @@ AREA_MAX_SQM = 1000.0  # 0 초과 이 값 이하 (상한은 명세상 가정)
 CERTIFICATES_MAX_COUNT = 20  # 가정
 CERTIFICATE_MAX_LENGTH = 50  # 가정
 
+# 업종 대분류 (1.3 · 4.4). 예전 표기(음식점 · 소매 · 서비스)는 쓰지 않는다. 순서는 화면 칩 · ⑩ 정렬 순서
+INDUSTRY_CATEGORIES = ("외식업", "서비스업", "소매업")
+
 # 표본 판정 (7.6): 최근 4개 분기 평균 점포 수가 이 값 미만이면 "표본 부족"
 MIN_STORE_COUNT = 5
 

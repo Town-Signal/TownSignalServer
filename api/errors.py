@@ -73,9 +73,24 @@ def _reason(error_type: str) -> ErrorReason:
     return "INVALID_VALUE"  # value_error · enum · literal_error 등
 
 
+# 칸별 맞춤 문구 (field, reason) → message. 없으면 아래 사유별 기본 문구를 쓴다.
+# TODO(가정): 문구는 화면명세서 확정 전 임시. 엔드포인트를 붙일 때마다 해당 칸을 더한다.
+FIELD_MESSAGES: dict[tuple[str, ErrorReason], str] = {
+    ("district_code", "REQUIRED"): "자치구를 선택해 주세요.",
+    ("district_code", "INVALID_FORMAT"): "자치구 코드는 숫자 5자리예요.",
+    ("district_code", "UNKNOWN_CODE"): "없는 자치구예요. 자치구를 다시 선택해 주세요.",
+    ("category", "INVALID_VALUE"): "업종 대분류는 외식업 · 서비스업 · 소매업 중 하나예요.",
+}
+
+
+def field_error(field: str, reason: ErrorReason, rejected_value: object | None = None) -> FieldError:
+    """서비스에서 직접 만드는 칸 오류(예: 마스터에 없는 코드 → UNKNOWN_CODE)."""
+    message = FIELD_MESSAGES.get((field, reason)) or _field_message(reason, {})
+    return FieldError(field=field, reason=reason, message=message, rejected_value=rejected_value)
+
+
 def _field_message(reason: ErrorReason, ctx: dict[str, Any]) -> str:
-    # TODO(가정): 칸별 맞춤 문구(예: "나이는 15~99세 사이로 입력해 주세요.")는 S6에서 엔드포인트 DTO에 붙인다.
-    # 여기서는 사유별 기본 문구만 만든다.
+    """사유별 기본 문구. 칸별 문구는 FIELD_MESSAGES가 먼저다."""
     if reason == "OUT_OF_RANGE":
         for key, tail in (("ge", "이상으로"), ("gt", "보다 크게"), ("le", "이하로"), ("lt", "보다 작게")):
             if key in ctx:
@@ -117,11 +132,12 @@ def to_field_errors(errors: list[dict[str, Any]]) -> list[FieldError]:
         if loc and loc[0] in _LOC_SOURCES:
             loc = loc[1:]
         reason = _reason(error["type"])
+        field = ".".join(str(p) for p in loc) or "body"
         result.append(
             FieldError(
-                field=".".join(str(p) for p in loc) or "body",
+                field=field,
                 reason=reason,
-                message=_field_message(reason, error.get("ctx") or {}),
+                message=FIELD_MESSAGES.get((field, reason)) or _field_message(reason, error.get("ctx") or {}),
                 rejected_value=_rejected(error),
             )
         )
