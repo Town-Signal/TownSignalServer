@@ -8,3 +8,6 @@ load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg://townsignal:townsignal@localhost:5432/townsignal")
 APP_ENV = os.getenv("APP_ENV", "local")
+
+# TODO(가정): 지원사업표 백업(pg_dump) 폴더. 명세 12.3 환경변수 6종에 없어 기본값 'backups'
+BACKUP_DIR = os.getenv("BACKUP_DIR", "backups")

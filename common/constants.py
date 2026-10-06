@@ -34,6 +34,9 @@ MIN_STORE_COUNT = 5
 # 요청 경로가 읽는 prediction.model_version (5.2)
 SERVING_MODEL_VERSION = "xgb_v1"
 
+# recommendation 보관 기간(4.6). 주 1회 run_weekly가 이보다 오래된 행을 지운다
+RECOMMENDATION_RETENTION_DAYS = 30
+
 # passed 3값 (3장 1번). 임대료가 없으면 "확인불가"이며 탈락시키지 않는다
 PASSED_OK = "통과"
 PASSED_EXCLUDED = "제외"
