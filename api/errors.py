@@ -98,7 +98,7 @@ FIELD_MESSAGES: dict[tuple[str, ErrorReason], str] = {
     ("certificates.*", "TOO_SHORT"): "자격증 이름을 입력해 주세요.",
     ("certificates.*", "TOO_LONG"): "자격증 이름은 50자 이하로 입력해 주세요.",
     # ① upcoming · ③ program 상세
-    **{("limit", r): "limit은 1~50 사이 정수로 요청해 주세요." for r in ("INVALID_TYPE", "OUT_OF_RANGE")},
+    # limit은 엔드포인트마다 범위가 달라(① 1~50 · ⑱ 1~426) 사유별 기본 문구(범위 포함)를 쓴다
     ("program_id", "INVALID_TYPE"): "공고 번호가 올바르지 않아요.",
     # ④ · ⑤ · ⑥
     **{
@@ -108,6 +108,16 @@ FIELD_MESSAGES: dict[tuple[str, ErrorReason], str] = {
     **{("top_k", r): "top_k는 1~50 사이 정수로 요청해 주세요." for r in ("INVALID_TYPE", "OUT_OF_RANGE")},
     ("dong_code", "REQUIRED"): "행정동을 선택해 주세요.",
     ("dong_code", "INVALID_FORMAT"): "행정동 코드는 숫자 8자리예요.",
+    # ⑪ · ⑭
+    **{
+        ("area_sqm", r): "면적은 0㎡보다 크고 1,000㎡ 이하로 입력해 주세요."
+        for r in ("INVALID_TYPE", "OUT_OF_RANGE")
+    },
+    ("dong_codes", "TOO_FEW"): "비교할 동네를 1곳 이상 골라 주세요.",
+    ("dong_codes", "TOO_MANY"): "비교는 4곳까지 할 수 있어요.",
+    ("dong_codes", "DUPLICATE"): "같은 동네를 두 번 고를 수 없어요.",
+    ("dong_codes.*", "INVALID_FORMAT"): "행정동 코드는 숫자 8자리예요.",
+    ("dong_codes.*", "UNKNOWN_CODE"): "없는 동네예요. 비교할 동네를 다시 골라 주세요.",
 }
 
 _INDEX = re.compile(r"\.\d+(?=\.|$)")

@@ -105,3 +105,13 @@ def test_data_status(has_prediction, average, expected):
     from common.scoring import data_status
 
     assert data_status(has_prediction, average) == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [(1, "적음"), (2, "적음"), (3, "보통"), (4, "보통"), (5, "많음"), (6, "많음"), (None, None)],
+)
+def test_store_level(value, expected):
+    from common.scoring import store_level
+
+    assert store_level([1, 2, 3, 4, 5, 6], value) == expected  # PERCENT_RANK 0 · .2 · .4 · .6 · .8 · 1

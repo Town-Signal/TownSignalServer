@@ -78,6 +78,25 @@ def data_status(has_prediction: bool, recent_avg_store_count: float | None) -> s
     return DATA_STATUS_OK
 
 
+STORE_LEVELS = ("적음", "보통", "많음")
+
+
+def store_level(population: Iterable[Value | None], value: Value | None) -> str | None:
+    """점포 수 수준(10.4): 같은 업종 서울 전체 행정동의 최근 분기 점포 수를 3등분한다.
+
+    TODO(가정): PERCENT_RANK가 1/3 미만이면 '적음', 2/3 이상이면 '많음', 그 사이는 '보통'.
+    점포 기록이 없으면 None.
+    """
+    rank = percent_rank(population, value)
+    if rank is None:
+        return None
+    if rank < 1 / 3:
+        return STORE_LEVELS[0]
+    if rank >= 2 / 3:
+        return STORE_LEVELS[2]
+    return STORE_LEVELS[1]
+
+
 @dataclass(frozen=True)
 class ScoreResult:
     total_score: float | None  # 0~100, 소수 1자리. 지표가 모두 없으면 None

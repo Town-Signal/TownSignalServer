@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from api.schemas.program import DistrictBudgetResult
-from api.schemas.region import BudgetSummary
+from api.schemas.region import BudgetSummary, ScoreBreakdown
 from api.schemas.types import DataStatus, GrowthConfidence, Passed, RentConfidence
 
 
@@ -16,17 +16,6 @@ class RecommendationExecuteRequest(BaseModel):
 
     rec_id: UUID
     top_k: int = Field(20, ge=1, le=50)
-
-
-class ScoreBreakdown(BaseModel):
-    """기능명세서 2.6.3 항목별 점수 분해. 값은 prediction에 배치가 채운 것 그대로다."""
-
-    sales_percentile: float | None
-    survival_percentile: float | None
-    growth_percentile: float | None = None
-    applied_weights: dict[str, float]  # {"sales": 0.4, "survival": 0.4, "growth": 0.2}
-    # TODO(가정): 9장은 float 필수지만 prediction.total_score는 스키마상 NULL일 수 있어 null 허용
-    total_score: float | None  # 0.0 ~ 100.0, 소수 1자리
 
 
 class DongRankResult(BaseModel):
