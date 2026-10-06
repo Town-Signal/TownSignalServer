@@ -263,6 +263,9 @@ def prediction(session: Session, dong_code: str, industry_code: str) -> Predicti
         store_count_latest=latest_count,
         store_level=store_level(counts.values(), latest_count),
         geo_code=dong.geo_code,
+        dong_name=dong.name,
+        district_code=dong.district_code,
+        district_name=dong.district_name,
     )
 
 
@@ -287,7 +290,11 @@ def summary(session: Session, dong_code: str, industry_code: str) -> SummaryResp
 
 
 def rankings(session: Session, industry_code: str, limit: int) -> RankingResponse:
-    """전체 행정동. total_score↓(예측 불가는 맨 뒤) → dong_code↑. rank는 저장된 score_rank 그대로."""
+    """전체 행정동. 저장된 score_rank↑(rank 없는 예측 불가는 맨 뒤) → dong_code↑.
+
+    8.4 ⑱은 total_score↓ → dong_code↑이지만, 동점일 때 score_rank(7.6 동점 규칙: sales_p50↓ → dong_code↑)와
+    목록 순서가 어긋나므로 score_rank를 그대로 따른다. TODO(가정): 명세 8.4 ⑱ 정렬 문장 보강 요청.
+    """
     industry = _industry_in_query(session, industry_code)
     dongs = repo.list_dongs(session)
     predictions = repo.predictions_by_dong(session, industry_code, SERVING_MODEL_VERSION)
@@ -315,7 +322,7 @@ def rankings(session: Session, industry_code: str, limit: int) -> RankingRespons
                 data_status=data_status(p is not None, averages.get(d.dong_code)),
             )
         )
-    items.sort(key=lambda i: (i.total_score is None, -(i.total_score or 0), i.dong_code))
+    items.sort(key=lambda i: (i.rank is None, i.rank or 0, i.dong_code))
     # TODO(가정): 예측 없는 동도 목록 끝에 넣고, total은 limit 전 전체 행정동 수
     return RankingResponse(
         industry_code=industry_code, industry_name=industry.name, items=items[:limit], total=len(items)
@@ -377,6 +384,7 @@ def compare(session: Session, req: RegionCompareRequest) -> RegionCompareRespons
                 growth_rate=_float(p.growth_rate) if p else None,
                 total_score=_float(p.total_score) if p else None,
                 rent_per_sqm=rent.rent_per_sqm,
+                monthly_rent=rent.monthly_rent,
                 estimated_rent_cost=rent.estimated_rent_cost,
                 rent_confidence=rent.confidence,
                 budget_margin=budget["budget_margin"] if budget else None,

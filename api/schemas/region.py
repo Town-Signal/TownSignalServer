@@ -177,6 +177,10 @@ class PredictionResponse(BaseModel):
     store_count_latest: int | None
     store_level: StoreLevel | None
     geo_code: str | None
+    # TODO(가정): 관심 카드 · 비교 칩 이름 표시용(명세 8.6에 없음, 보강 요청)
+    dong_name: str
+    district_code: str
+    district_name: str
 
 
 class SummaryResponse(BaseModel):
@@ -219,6 +223,7 @@ class CompareItem(BaseModel):
     survival_range: tuple[float | None, float | None] | None
     growth_rate: float | None
     rent_per_sqm: float | None
+    monthly_rent: int | None  # 원/월, 임대료 없으면 null. TODO(가정): 명세 8.6에 없음, 보강 요청
     estimated_rent_cost: int | None
     rent_confidence: RentConfidence
     budget_margin: int | None  # rec_id가 있을 때만

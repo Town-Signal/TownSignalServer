@@ -138,7 +138,30 @@ schema.sql의 `CREATE EXTENSION pgcrypto`는 PostgreSQL 13 이상에서 DB 소�
 | DB · 사용자 · 비밀번호 | `townsignal` · `townsignal` · `townsignal` |
 | DATABASE_URL | `postgresql+psycopg://townsignal:townsignal@localhost:5432/townsignal` |
 
-### 4. API 실행
+### 4. 더미 데이터 적재 (로컬 전용)
+
+schema.sql만 적용한 DB는 비어 있다. 화면과 API를 끝까지 돌려 보려면 `data/dev/`의 더미(실제 데이터 아님)를 넣는다.
+
+```bash
+# .env에 APP_ENV=local이 있어야 한다(.env.example을 복사했다면 이미 있음)
+python -m batch.jobs.load_dev_fixtures
+```
+
+- `APP_ENV`가 명시적으로 `local`이고 DB 호스트가 로컬(localhost · 127.0.0.1 · ::1 · db)일 때만 돈다. 아니면 거부한다.
+- 로컬 DB의 15개 표를 **모두 비우고** 다시 넣는다(로컬 추천 기록 포함). 몇 번을 돌려도 결과가 같다.
+- 더미가 아닌 행정동 · 지원사업이 있으면 지우지 않고 거부한다. 지워도 될 때만 `--force`를 붙인다.
+- 마지막에 표별 행 수와 "더미 데이터 적재 완료"가 나오면 성공이다.
+
+### 5. 테스트로 확인
+
+```bash
+pytest -q
+ruff check .
+```
+
+모두 통과하면 로컬 환경이 CI와 같게 준비된 것이다. 자세한 내용은 아래 [테스트와 린트](#테스트와-린트).
+
+### 6. API 실행
 
 가상환경을 켠 상태에서 (두 OS 같음)
 

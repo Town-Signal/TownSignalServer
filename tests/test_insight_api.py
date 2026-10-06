@@ -66,6 +66,7 @@ def test_prediction_ok_uses_stored_values(api_client, dummy_db):
     assert data["data_status"] == "정상" and data["store_count_avg"] >= 5
     assert data["store_level"] in ("적음", "보통", "많음") and data["store_count_latest"] > 0
     assert data["geo_code"] == "1121069" and data["computed_at"] is not None
+    assert (data["dong_name"], data["district_code"], data["district_name"]) == ("신림동", "11620", "관악구")
 
 
 def test_prediction_no_row_is_200_null(api_client):
@@ -82,6 +83,7 @@ def test_prediction_no_row_is_200_null(api_client):
     ):
         assert data[key] is None, key
     assert data["store_count_avg"] is not None and data["store_count_latest"] is not None
+    assert (data["dong_name"], data["district_name"]) == ("회기동", "동대문구")  # 예측이 없어도 이름은 있다
 
 
 def test_prediction_no_store_dong(api_client):
@@ -336,7 +338,7 @@ def test_rankings_order_and_stored_rank(api_client, dummy_db):
             text(
                 "SELECT d.dong_code FROM dong d LEFT JOIN prediction p ON p.dong_code = d.dong_code "
                 "AND p.industry_code = 'CS100001' AND p.model_version = 'xgb_v1' "
-                "ORDER BY p.total_score DESC NULLS LAST, d.dong_code"
+                "ORDER BY p.score_rank NULLS LAST, d.dong_code"
             )
         ).scalars()
     )
@@ -355,6 +357,33 @@ def test_rankings_order_and_stored_rank(api_client, dummy_db):
         if p:
             assert item["total_score"] == float(p["total_score"])
             assert item["sales_monthly_p50"] == p["sales_p50"] // 3
+    ranks_in_order = [i["rank"] for i in data["items"] if i["rank"] is not None]
+    assert ranks_in_order == list(range(1, len(ranks_in_order) + 1))  # 목록 순서 = rank, 빈틈 없음
+
+
+def test_rankings_tie_follows_score_rank(api_client, dummy_db):
+    """total_score가 같으면 dong_code가 아니라 score_rank(7.6 동점 규칙: sales_p50↓) 순서를 따른다."""
+    top = dummy_db.execute(
+        text(
+            "SELECT dong_code, sales_p50 FROM prediction WHERE industry_code = 'CS100001' "
+            "AND model_version = 'xgb_v1' AND score_rank IN (1, 2) ORDER BY dong_code"
+        )
+    ).all()
+    (low_code, low_sales), (high_code, high_sales) = top
+    # 동점 · dong_code가 큰 쪽이 매출이 커서 1위 — dong_code 정렬이었다면 순서가 뒤집힌다
+    for code, sales, rank in ((high_code, max(low_sales, high_sales) + 1, 1), (low_code, low_sales, 2)):
+        dummy_db.execute(
+            text(
+                "UPDATE prediction SET total_score = 99.0, sales_p50 = :s, score_rank = :r "
+                "WHERE dong_code = :d AND industry_code = 'CS100001' AND model_version = 'xgb_v1'"
+            ),
+            {"s": sales, "r": rank, "d": code},
+        )
+    items = success(rankings(api_client, industry_code="CS100001", limit=3))["data"]["items"]
+    assert [(i["dong_code"], i["rank"], i["total_score"]) for i in items[:2]] == [
+        (high_code, 1, 99.0),
+        (low_code, 2, 99.0),
+    ]
 
 
 def test_rankings_unpredicted_last(api_client):
@@ -434,6 +463,7 @@ def test_compare_order_and_values(api_client, dummy_db):
         assert item["budget_margin"] is None and item["passed"] is None  # rec_id 없음
         assert item["store_count"] > 0 and item["total_population"] > 0
     assert items[0]["estimated_rent_cost"] == items[1]["estimated_rent_cost"] == 16_929_000  # 같은 구 · 33㎡
+    assert items[0]["monthly_rent"] == items[1]["monthly_rent"] == 940_500  # 16,929,000 ÷ 18
     assert items[2]["growth_rate"] is None
 
 
@@ -455,10 +485,12 @@ def test_compare_with_rec_id_margin(api_client):
     assert (
         dobong["passed"],
         dobong["budget_margin"],
+        dobong["monthly_rent"],
         dobong["estimated_rent_cost"],
         dobong["rent_confidence"],
     ) == (
         "확인불가",
+        None,
         None,
         None,
         "없음",
