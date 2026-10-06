@@ -9,6 +9,7 @@ FastAPI 기본 오류 형식 {"detail": ...}을 내보내지 않는다. 모든 �
 """
 
 import logging
+import re
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -73,6 +74,8 @@ def _reason(error_type: str) -> ErrorReason:
     return "INVALID_VALUE"  # value_error · enum · literal_error 등
 
 
+_NUMBER_REASONS: tuple[ErrorReason, ...] = ("REQUIRED", "INVALID_TYPE", "OUT_OF_RANGE")
+
 # 칸별 맞춤 문구 (field, reason) → message. 없으면 아래 사유별 기본 문구를 쓴다.
 # TODO(가정): 문구는 화면명세서 확정 전 임시. 엔드포인트를 붙일 때마다 해당 칸을 더한다.
 FIELD_MESSAGES: dict[tuple[str, ErrorReason], str] = {
@@ -80,12 +83,40 @@ FIELD_MESSAGES: dict[tuple[str, ErrorReason], str] = {
     ("district_code", "INVALID_FORMAT"): "자치구 코드는 숫자 5자리예요.",
     ("district_code", "UNKNOWN_CODE"): "없는 자치구예요. 자치구를 다시 선택해 주세요.",
     ("category", "INVALID_VALUE"): "업종 대분류는 외식업 · 서비스업 · 소매업 중 하나예요.",
+    # ② calculate-budgets (age · industry_code REQUIRED 문구는 8.1.1 실패 예시 그대로)
+    **{("age", r): "나이는 15~99세 사이로 입력해 주세요." for r in _NUMBER_REASONS},
+    ("industry_code", "REQUIRED"): "희망 업종을 선택해 주세요.",
+    ("industry_code", "INVALID_FORMAT"): "희망 업종을 다시 선택해 주세요.",
+    ("industry_code", "UNKNOWN_CODE"): "없는 업종이에요. 희망 업종을 다시 선택해 주세요.",
+    **{("capital", r): "자본금은 0원 이상으로 입력해 주세요." for r in _NUMBER_REASONS},
+    **{("career_years", r): "경력은 0년 이상으로 입력해 주세요." for r in ("INVALID_TYPE", "OUT_OF_RANGE")},
+    **{
+        ("target_area_sqm", r): "희망 면적은 0㎡보다 크고 1,000㎡ 이하로 입력해 주세요."
+        for r in ("INVALID_TYPE", "OUT_OF_RANGE")
+    },
+    ("certificates", "TOO_MANY"): "자격증은 20개까지 넣을 수 있어요.",
+    ("certificates.*", "TOO_SHORT"): "자격증 이름을 입력해 주세요.",
+    ("certificates.*", "TOO_LONG"): "자격증 이름은 50자 이하로 입력해 주세요.",
+    # ① upcoming · ③ program 상세
+    **{("limit", r): "limit은 1~50 사이 정수로 요청해 주세요." for r in ("INVALID_TYPE", "OUT_OF_RANGE")},
+    ("program_id", "INVALID_TYPE"): "공고 번호가 올바르지 않아요.",
 }
+
+_INDEX = re.compile(r"\.\d+(?=\.|$)")
+
+
+def _field_message_for(field: str, reason: ErrorReason, ctx: dict[str, Any]) -> str:
+    """칸별 문구 → 목록 칸(certificates.0 → certificates.*) 문구 → 사유별 기본 문구 순으로 찾는다."""
+    return (
+        FIELD_MESSAGES.get((field, reason))
+        or FIELD_MESSAGES.get((_INDEX.sub(".*", field), reason))
+        or _field_message(reason, ctx)
+    )
 
 
 def field_error(field: str, reason: ErrorReason, rejected_value: object | None = None) -> FieldError:
     """서비스에서 직접 만드는 칸 오류(예: 마스터에 없는 코드 → UNKNOWN_CODE)."""
-    message = FIELD_MESSAGES.get((field, reason)) or _field_message(reason, {})
+    message = _field_message_for(field, reason, {})
     return FieldError(field=field, reason=reason, message=message, rejected_value=rejected_value)
 
 
@@ -137,7 +168,7 @@ def to_field_errors(errors: list[dict[str, Any]]) -> list[FieldError]:
             FieldError(
                 field=field,
                 reason=reason,
-                message=FIELD_MESSAGES.get((field, reason)) or _field_message(reason, error.get("ctx") or {}),
+                message=_field_message_for(field, reason, error.get("ctx") or {}),
                 rejected_value=_rejected(error),
             )
         )

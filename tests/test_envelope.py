@@ -235,8 +235,19 @@ def test_validation_collects_multiple_errors_with_range_message(client):
     body = assert_envelope(response, 422, "FAILURE", "VALIDATION_ERROR")
     errors = {e["field"]: e for e in body["errors"]}
     assert errors["age"]["reason"] == "OUT_OF_RANGE"
-    assert errors["age"]["message"] == "99 이하로 입력해 주세요."
+    # 칸별 문구(FIELD_MESSAGES)가 사유별 기본 문구보다 먼저다
+    assert errors["age"]["message"] == "나이는 15~99세 사이로 입력해 주세요."
     assert errors["industry_code"]["reason"] == "REQUIRED"
+    assert errors["industry_code"]["message"] == "희망 업종을 선택해 주세요."
+
+
+def test_default_range_message_when_no_field_message():
+    from api.errors import _field_message_for
+
+    assert _field_message_for("unknown_field", "OUT_OF_RANGE", {"le": 99}) == "99 이하로 입력해 주세요."
+    assert _field_message_for("unknown_field", "OUT_OF_RANGE", {"ge": 1}) == "1 이상으로 입력해 주세요."
+    message = _field_message_for("certificates.3", "TOO_LONG", {"max_length": 50})
+    assert message == "자격증 이름은 50자 이하로 입력해 주세요."  # 목록 칸 certificates.* 문구
 
 
 def test_validation_on_query_and_path(client):

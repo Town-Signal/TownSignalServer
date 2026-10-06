@@ -43,3 +43,11 @@ class IndustryItem(BaseModel):
     industry_code: str
     name: str
     category: str
+
+
+class BudgetSummary(BaseModel):
+    """8.6 ② · ⑤"""
+
+    passed_district_count: int
+    eligible_district_count: int  # 통과 + 확인불가 (화면 '감당 가능한 구')
+    excluded_district_count: int

@@ -18,8 +18,10 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from api.db import engine, get_session
+from api.deps import get_today
 from api.main import create_app
 from batch.jobs.load_dev_fixtures import load
+from tests.api_helpers import FIXED_TODAY
 
 
 @pytest.fixture(scope="session")
@@ -52,6 +54,7 @@ def db_session(db_engine: Engine) -> Iterator[Session]:
 # ── API 테스트 ───────────────────────────────────────────────
 
 
+
 @pytest.fixture(scope="module")
 def dummy_db(db_engine: Engine) -> Iterator[Connection]:
     """모듈 하나 동안 쓰는 연결. 트랜잭션 안에서 더미(data/dev)를 적재하고 모듈이 끝나면 롤백한다.
@@ -69,8 +72,13 @@ def dummy_db(db_engine: Engine) -> Iterator[Connection]:
 
 
 @pytest.fixture
-def api_client(dummy_db: Connection) -> TestClient:
-    """get_session을 더미가 적재된 연결의 SAVEPOINT 세션으로 바꾼 TestClient."""
+def api_client(dummy_db: Connection) -> Iterator[TestClient]:
+    """get_session을 더미가 적재된 연결의 SAVEPOINT 세션으로 바꾼 TestClient.
+
+    테스트마다 SAVEPOINT를 하나 더 열고 끝나면 되돌린다. ②처럼 recommendation을 쓰거나 테스트가
+    지원사업을 지워도 다음 테스트에 남지 않는다. '오늘'은 FIXED_TODAY로 고정한다(마감 판정용).
+    """
+    per_test = dummy_db.begin_nested()
     app = create_app()
 
     def session_on_dummy() -> Iterator[Session]:
@@ -81,7 +89,12 @@ def api_client(dummy_db: Connection) -> TestClient:
             session.close()
 
     app.dependency_overrides[get_session] = session_on_dummy
-    return TestClient(app)
+    app.dependency_overrides[get_today] = lambda: FIXED_TODAY
+    try:
+        yield TestClient(app)
+    finally:
+        if per_test.is_active:
+            per_test.rollback()
 
 
 @pytest.fixture
