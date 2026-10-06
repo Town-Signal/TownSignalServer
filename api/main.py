@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.config import CORS_ORIGINS
 from api.errors import register_exception_handlers
 from api.middleware import REQUEST_ID_HEADER, RequestIdMiddleware
-from api.routers import certificates, health, programs, regions
+from api.routers import certificates, health, programs, recommendations, regions
 
 
 def create_app() -> FastAPI:
@@ -33,6 +33,7 @@ def create_app() -> FastAPI:
     app.include_router(regions.router)
     app.include_router(certificates.router)
     app.include_router(programs.router)
+    app.include_router(recommendations.router)
     return app
 
 

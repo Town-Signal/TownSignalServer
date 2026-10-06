@@ -9,7 +9,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 
-from common.constants import SCORE_WEIGHTS
+from common.constants import MIN_STORE_COUNT, SCORE_WEIGHTS
 
 FACTORS = ("sales", "survival", "growth")
 
@@ -48,6 +48,34 @@ def _redistribute(weights: Mapping[str, float], missing: set[str]) -> dict[str, 
     if total == 0:
         return {k: 0.0 for k in weights}
     return {k: (usable[k] / total if k in usable else 0.0) for k in weights}
+
+
+def applied_weights(
+    percentiles: Mapping[str, float | None], weights: Mapping[str, float] = SCORE_WEIGHTS
+) -> dict[str, float]:
+    """백분위 결측 여부만 보고 적용 가중치를 구한다(근거 분해 표시용). 점수는 다시 계산하지 않는다.
+
+    예) 성장세 백분위가 없으면 {"sales": 0.5, "survival": 0.5, "growth": 0.0}
+    """
+    return _redistribute(weights, {k for k in weights if percentiles.get(k) is None})
+
+
+DATA_STATUS_OK = "정상"
+DATA_STATUS_SAMPLE_SHORT = "표본 부족"
+DATA_STATUS_NO_PREDICTION = "예측 불가"
+
+
+def data_status(has_prediction: bool, recent_avg_store_count: float | None) -> str:
+    """7.6 표본 판정. 예측 행이 없으면 '예측 불가', 최근 4개 분기 평균 점포 수가 5 미만이면 '표본 부족'.
+
+    TODO(가정): 예측은 있는데 점포 기록이 없으면(평균 None) '표본 부족'으로 본다.
+    표본 부족도 순위에서 빼지 않는다(판정 20).
+    """
+    if not has_prediction:
+        return DATA_STATUS_NO_PREDICTION
+    if recent_avg_store_count is None or recent_avg_store_count < MIN_STORE_COUNT:
+        return DATA_STATUS_SAMPLE_SHORT
+    return DATA_STATUS_OK
 
 
 @dataclass(frozen=True)

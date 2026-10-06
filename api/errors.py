@@ -100,6 +100,14 @@ FIELD_MESSAGES: dict[tuple[str, ErrorReason], str] = {
     # ① upcoming · ③ program 상세
     **{("limit", r): "limit은 1~50 사이 정수로 요청해 주세요." for r in ("INVALID_TYPE", "OUT_OF_RANGE")},
     ("program_id", "INVALID_TYPE"): "공고 번호가 올바르지 않아요.",
+    # ④ · ⑤ · ⑥
+    **{
+        ("rec_id", r): "추천 결과를 찾을 수 없어요. 다시 추천받아 주세요."
+        for r in ("REQUIRED", "INVALID_TYPE", "INVALID_FORMAT")
+    },
+    **{("top_k", r): "top_k는 1~50 사이 정수로 요청해 주세요." for r in ("INVALID_TYPE", "OUT_OF_RANGE")},
+    ("dong_code", "REQUIRED"): "행정동을 선택해 주세요.",
+    ("dong_code", "INVALID_FORMAT"): "행정동 코드는 숫자 8자리예요.",
 }
 
 _INDEX = re.compile(r"\.\d+(?=\.|$)")

@@ -73,3 +73,35 @@ def test_population_is_not_candidate_set():
     """같은 동이라도 모집단(서울 전체)이 같으면 백분위가 같다 — 후보군에 따라 바뀌지 않는다."""
     seoul = [100, 200, 300, 400, 500]
     assert percent_rank(seoul, 400) == 0.75
+
+
+# ── 근거 분해용 가중치 · 표본 판정 ─────────────────────────────
+
+
+def test_applied_weights_only_redistributes_weights():
+    from common.scoring import applied_weights
+
+    assert applied_weights({"sales": 0.9, "survival": 0.1, "growth": 0.5}) == {
+        "sales": 0.4, "survival": 0.4, "growth": 0.2,
+    }
+    assert applied_weights({"sales": 0.55, "survival": 0.60, "growth": None}) == {
+        "sales": 0.5, "survival": 0.5, "growth": 0.0,
+    }
+    assert applied_weights({"sales": None, "survival": None, "growth": None}) == {
+        "sales": 0.0, "survival": 0.0, "growth": 0.0,
+    }
+
+
+@pytest.mark.parametrize(
+    ("has_prediction", "average", "expected"),
+    [
+        (False, 30.0, "예측 불가"),
+        (True, 4.75, "표본 부족"),
+        (True, 5.0, "정상"),
+        (True, None, "표본 부족"),  # 예측은 있는데 점포 기록이 없음(가정)
+    ],
+)
+def test_data_status(has_prediction, average, expected):
+    from common.scoring import data_status
+
+    assert data_status(has_prediction, average) == expected
