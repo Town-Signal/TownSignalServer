@@ -11,7 +11,6 @@ import pytest
 from batch.jobs import build_summary_cache, build_support_program, train_and_predict
 
 STUBS = [
-    (build_support_program.fetch_kstartup_notices, ("key",)),
     (build_support_program.submit_structuring_batch, ([],)),
     (build_support_program.collect_pending_llm_results, (None,)),
     (build_support_program.upsert_programs, (None, [])),
