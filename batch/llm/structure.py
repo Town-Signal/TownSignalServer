@@ -4,9 +4,10 @@ LLM은 amount_max · 대상 구 · 중복 수혜 불가 · 신청 자격 조건�
 이름 · 기관 · 접수 기간 · 주소 · 원문은 수집한 값을 그대로 쓴다.
 모호한 요건은 해석하지 않고 field = "unsupported"에 원문 문구로 남긴다. 평가기는 모르는 필드가 하나라도 있으면
 그 사업을 매칭하지 않으므로(common/evaluator) 검수자가 고치기 전까지 매칭에서 빠진다.
-LLM 호출은 batch.llm.client.generate_json 하나라서 테스트에서는 가짜로 바꾼다.
+LLM 호출은 batch.llm.client에 모여 있어서 테스트에서는 가짜로 바꾼다.
 """
 
+import hashlib
 import time
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any
@@ -66,6 +67,19 @@ PROMPT = """너는 정부·지자체 창업 지원사업 공고에서 지원금 
 ## 공고 원문
 {text}
 """  # noqa: E501  프롬프트는 한 줄에 한 규칙이 읽기 쉽다
+
+
+def _digest(value: str) -> str:
+    return hashlib.sha256(value.encode()).hexdigest()[:16]
+
+
+def custom_id(notice: "RawNotice") -> str:
+    """Batch 요청의 꼬리표: 어느 공고(주소 지문)의 어느 원문(원문 지문)에 대한 요청인지. 33자.
+
+    주소가 없는 공고는 이름 + 기관으로 대신한다. 결과가 돌아왔을 때 현재 공고의 꼬리표와 같아야 짝이 맞고,
+    그 사이 원문이 바뀌었으면 꼬리표가 달라져 옛 답이 새 원문에 붙지 않는다.
+    """
+    return f"{_digest(notice.source_url or f'{notice.title}|{notice.agency}')}-{_digest(notice.raw_text)}"
 
 
 def build_prompt(notice: "RawNotice", district_names: list[str]) -> str:

@@ -1,12 +1,14 @@
-"""지원사업표(support_program)를 채우는 배치 작업 — 담당: 백엔드(지원사업). 지금은 골격(인터페이스)만 있다.
+"""지원사업표(support_program)를 채우는 배치 작업 — 담당: 백엔드(지원사업).
 
 실행: python -m batch.jobs.build_support_program  (EC2 cron에서는 run_weekly가 부른다)
 주기: 주 1회. 명세 4.8 · 6.6 LLM ① · 12.1.
 
-흐름(4.6 run_weekly ① ②)
+흐름(4.6 run_weekly ① ②). main()이 공고를 한 번만 수집하고 ①과 ②가 그 목록을 함께 쓴다.
 1. 지난주에 제출한 LLM Batch 결과를 받아 검수 대기 행으로 적재한다(collect_pending_llm_results).
-2. 이번 주 새 공고를 모아(fetch_kstartup_notices · 구 전용은 수작업)
-   LLM 구조화를 요청한다(submit_structuring_batch).
+   결과는 꼬리표(custom_id)로 이번 주 공고와 짝지으며, 그 사이 원문이 바뀌었거나 DB에 이미 같은 원문이 있으면
+   적재하지 않는다(검수 결과를 덮어쓰지 않으려고).
+2. 이번 주 새 공고 · 원문이 바뀐 공고만 LLM 구조화를 요청한다
+   (fetch_kstartup_notices · submit_structuring_batch). 구 전용은 수작업.
 3. 구조화 결과는 upsert_programs로 support_program에 넣는다. verified_by는 비워 두고 사람이 원문과 대조해
    검수하면 채운다. verified_by IS NOT NULL인 행만 API 매칭에 쓴다(판정 24).
 
@@ -17,16 +19,22 @@
 
 import json
 import logging
+import os
 import time
 import urllib.parse
 import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from html.parser import HTMLParser
 from typing import Any, Literal
 
-from sqlalchemy import Connection, text
+from sqlalchemy import Connection, Engine, create_engine, text
 
+from batch import config
+from batch.llm import client as llm_client
+from batch.llm.client import BatchRequest, BatchResult
+from batch.llm.structure import build_prompt, custom_id, response_schema, to_program
 from batch.pipeline.db import transaction
 
 logger = logging.getLogger(__name__)
@@ -35,6 +43,7 @@ KSTARTUP_URL = "https://apis.data.go.kr/B552735/kisedKstartupService01/getAnnoun
 KSTARTUP_REGIONS = ("서울", "전국")  # 수집할 지역
 PER_PAGE = 100  # 한 쪽에 받는 건수
 DETAIL_SLEEP_SEC = 1.0  # 상세 페이지 요청 사이 대기 초
+COLLECT_DAYS = 14  # 최근 이만큼 끝난 Batch의 결과를 받는다
 DETAIL_CLASS = "app_notice_details-wrap"  # raw_text 수집을 위한 상세 페이지의 본문 영역
 # 마감 시각이 지난 공고는 모집중 주소가 빈 껍데기(JS로 모집마감 주소로 이동)라서 본문이 비면 바꿔 다시 받는다
 ONGOING_PATH, DEADLINE_PATH = "bizpbanc-ongoing.do", "bizpbanc-deadline.do"
@@ -159,21 +168,63 @@ def fetch_kstartup_notices(api_key: str) -> list[RawNotice]:
     return notices
 
 
-def submit_structuring_batch(notices: list[RawNotice]) -> str:
+def _stored_raw_texts(conn: Connection, notices: list[RawNotice]) -> dict[str, str | None]:
+    """DB에 이미 있는 공고의 {source_url: raw_text}. 주소가 없는 공고는 조회하지 않는다."""
+    urls = [n.source_url for n in notices if n.source_url]
+    if not urls:
+        return {}
+    rows = conn.execute(
+        text("SELECT source_url, raw_text FROM support_program WHERE source_url = ANY(:urls)"), {"urls": urls}
+    )
+    return {url: raw for url, raw in rows}
+
+
+def _in_db(stored: dict[str, str | None], notice: RawNotice) -> bool:
+    """DB에 같은 주소로 같은 원문이 이미 있다. 구조화도 적재도 하지 않는다(검수 결과를 지키려고)."""
+    return notice.source_url is not None and stored.get(notice.source_url) == notice.raw_text
+
+
+def submit_structuring_batch(
+    notices: list[RawNotice],
+    district_codes: dict[str, str],
+    submit: Callable[[list[BatchRequest], dict[str, Any]], str] = llm_client.submit_batch,
+) -> str | None:
     """공고 원문 → 구조화(JSON 스키마 강제) LLM Batch 요청을 제출하고 batch id를 돌려준다(6.6 LLM ①).
 
-    출력 필드: name · agency · amount_max(원) · district_code · is_exclusive · apply_start · apply_end ·
-    eligibility(7.3 트리) · source_url. 결과는 다음 주 collect_pending_llm_results가 받는다.
+    입력: 제출할 공고, {구 이름: 구 코드}(프롬프트 · 스키마에 구 이름 목록을 넣는다), 제출 함수(테스트용).
+    요청마다 custom_id(structure.custom_id)를 붙인다. 제출할 공고가 없으면 제출하지 않고 None을 돌려준다.
+    결과는 다음 주 collect_pending_llm_results가 받는다.
     """
-    raise NotImplementedError("LLM 구조화 요청은 지원사업 담당이 구현한다(4.8 · 6.6)")
+    if not notices:
+        return None
+    names = list(district_codes)
+    requests = [BatchRequest(custom_id(n), build_prompt(n, names)) for n in notices]
+    return submit(requests, response_schema(names))
 
 
-def collect_pending_llm_results(conn: Connection) -> int:
+def collect_pending_llm_results(
+    conn: Connection,
+    notices: list[RawNotice],
+    district_codes: dict[str, str],
+    since: datetime,
+    fetch_results: Callable[[datetime], list[BatchResult]] = llm_client.fetch_batch_results,
+) -> int:
     """지난주에 제출한 Batch 결과를 받아 upsert_programs로 검수 대기 행(verified_by NULL)으로 적재한다.
 
+    입력: 이번 주에 수집한 공고(결과와 짝지을 수집 값을 가져온다), {구 이름: 구 코드}, 결과를 볼 시작 시각.
+    다음 중 하나면 그 결과는 적재하지 않는다: ① 이번 주 공고에 짝이 없다(사라진 공고) ② 꼬리표가 다르다
+    (제출 뒤 원문이 바뀜) ③ 그 요청이 실패했다 ④ DB에 이미 같은 원문이 있다(이미 적재했거나 검수 중).
     출력: 적재한 행 수. 적재 표: support_program.
     """
-    raise NotImplementedError("LLM Batch 결과 수집은 지원사업 담당이 구현한다(4.6 ①)")
+    by_id = {custom_id(n): n for n in notices}
+    stored = _stored_raw_texts(conn, notices)
+    programs = []
+    for result in fetch_results(since):
+        notice = by_id.get(result.custom_id)
+        if notice is None or not isinstance(result.data, dict) or _in_db(stored, notice):
+            continue
+        programs.append(to_program(notice, result.data, district_codes))
+    return upsert_programs(conn, programs)
 
 
 _SAVED = (
@@ -245,9 +296,44 @@ def upsert_programs(conn: Connection, programs: list[dict[str, Any]]) -> int:
     return len(programs)
 
 
-def main() -> None:
-    """run_weekly ① · ②: 지난주 결과 수집 → 이번 주 공고 수집 · 구조화 요청."""
-    raise NotImplementedError("지원사업 수집 · 구조화 · 적재는 아직 구현 전이다(4.8)")
+def run(
+    conn: Connection,
+    notices: list[RawNotice],
+    now: datetime | None = None,
+    submit: Callable[[list[BatchRequest], dict[str, Any]], str] = llm_client.submit_batch,
+    fetch_results: Callable[[datetime], list[BatchResult]] = llm_client.fetch_batch_results,
+) -> tuple[int, str | None]:
+    """수집한 공고로 ① 지난주 결과를 적재하고 ② 새 · 바뀐 공고를 제출한다.
+
+    출력: (적재한 행 수, batch id). 제출할 공고가 없으면 batch id는 None이다.
+    """
+    district_codes = {
+        name: code for code, name in conn.execute(text("SELECT district_code, name FROM district"))
+    }
+    since = (now or datetime.now(UTC)) - timedelta(days=COLLECT_DAYS)
+    saved = collect_pending_llm_results(conn, notices, district_codes, since, fetch_results)
+    stored = _stored_raw_texts(conn, notices)  # ①에서 적재한 공고는 이제 DB에 있어 제출 대상에서 빠진다
+    batch_id = submit_structuring_batch([n for n in notices if not _in_db(stored, n)], district_codes, submit)
+    return saved, batch_id
+
+
+def main(
+    engine: Engine | None = None,
+    fetch: Callable[[str], list[RawNotice]] = fetch_kstartup_notices,
+    submit: Callable[[list[BatchRequest], dict[str, Any]], str] = llm_client.submit_batch,
+    fetch_results: Callable[[datetime], list[BatchResult]] = llm_client.fetch_batch_results,
+) -> None:
+    """run_weekly ① · ②: 공고를 한 번 수집해 지난주 Batch 결과를 적재하고 새 · 바뀐 공고를 Batch로 제출한다.
+
+    인자는 모두 테스트에서 바꿔 끼우는 용도라 run_weekly처럼 인자 없이 불러도 된다. DB 작업은 한 트랜잭션이다.
+    """
+    api_key = os.getenv("PUBLIC_DATA_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("PUBLIC_DATA_API_KEY가 비어 있다")
+    notices = fetch(api_key)
+    with (engine or create_engine(config.DATABASE_URL)).begin() as conn:
+        saved, batch_id = run(conn, notices, submit=submit, fetch_results=fetch_results)
+    logger.info("지원사업: 수집 %d건 · 적재 %d건 · 제출 batch %s", len(notices), saved, batch_id or "없음")
 
 
 if __name__ == "__main__":

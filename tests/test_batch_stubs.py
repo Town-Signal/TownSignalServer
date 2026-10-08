@@ -5,17 +5,17 @@
 
 import subprocess
 import sys
+from datetime import datetime
 
 import pytest
 
-from batch.jobs import build_summary_cache, build_support_program, train_and_predict
+from batch.jobs import build_summary_cache, train_and_predict
 from batch.llm import client as llm_client
 
 STUBS = [
     (llm_client.generate_json, ("프롬프트", {})),
-    (build_support_program.submit_structuring_batch, ([],)),
-    (build_support_program.collect_pending_llm_results, (None,)),
-    (build_support_program.main, ()),
+    (llm_client.submit_batch, ([], {})),
+    (llm_client.fetch_batch_results, (datetime(2026, 1, 1),)),
     (train_and_predict.load_training_frames, (None,)),
     (train_and_predict.train_sales_model, ({},)),
     (train_and_predict.train_survival_model, ({},)),
