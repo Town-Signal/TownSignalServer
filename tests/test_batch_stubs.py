@@ -9,8 +9,10 @@ import sys
 import pytest
 
 from batch.jobs import build_summary_cache, build_support_program, train_and_predict
+from batch.llm import client as llm_client
 
 STUBS = [
+    (llm_client.generate_json, ("프롬프트", {})),
     (build_support_program.submit_structuring_batch, ([],)),
     (build_support_program.collect_pending_llm_results, (None,)),
     (build_support_program.main, ()),
