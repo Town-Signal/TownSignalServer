@@ -127,18 +127,17 @@ def collect(conn, notices, results, since=NOW):
 
 
 def test_collect_saves_structured_result_with_collected_values(conn):
-    one = notice(1)
+    one = notice(1, raw_text="신청대상: 용산구 거주 청년")
+    data = answer(district_name="용산구", district_evidence="용산구 거주 청년", is_exclusive=True)
 
-    saved = collect(
-        conn, [one], [BatchResult(custom_id(one), answer(district_name="용산구", is_exclusive=True))]
-    )
+    saved = collect(conn, [one], [BatchResult(custom_id(one), data)])
 
     assert saved == 1
     r = row(conn)
     assert (r["name"], r["agency"], r["raw_text"], r["apply_end"]) == (
         "공고1",
         "기관",
-        "원문1",
+        "신청대상: 용산구 거주 청년",
         date(2026, 12, 31),
     )
     assert (r["amount_max"], r["district_code"], r["is_exclusive"]) == (3_000_000, "11170", True)

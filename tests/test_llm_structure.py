@@ -36,6 +36,7 @@ def result(**kw):
         "amount_max": 0,
         "amount_evidence": "",
         "district_name": None,
+        "district_evidence": "",
         "is_exclusive": False,
         "conditions_known": True,
         "conditions": [],
@@ -88,21 +89,66 @@ def test_is_exclusive_is_true_only_for_boolean_true(value):
 # ── 구 판별 ────────────────────────────────────────────────────────────
 
 
-def test_district_name_is_converted_to_code():
-    assert program(result(district_name="용산구"))["district_code"] == "11170"
+# 원문에 실제로 있는 근거 문구
+GROUND = "신청대상: 용산구에서 6개월 이상 거주 중이며 용산구에 사업자등록을 한 청년"
+
+
+def district(name, evidence, raw_text=f"공고 안내\n{GROUND}\n제출서류", **notice_kw):
+    res = result(district_name=name, district_evidence=evidence)
+    return program(res, raw_text=raw_text, **notice_kw)["district_code"]
+
+
+def test_district_is_converted_to_code_when_evidence_is_in_the_text():
+    assert district("용산구", "용산구에서 6개월 이상 거주 중이며") == "11170"
+
+
+def test_evidence_with_changed_particle_is_accepted():
+    """원문은 "용산구에서"인데 LLM이 "용산구에"로 옮겼다. 거의 그대로면 인정한다."""
+    assert district("용산구", "용산구에 6개월 이상 거주 중이며 용산구에 사업자등록을 한 청년") == "11170"
+
+
+def test_evidence_matches_even_if_whitespace_differs():
+    assert district("용산구", "용산구에서   6개월 이상\n거주 중이며") == "11170"
+
+
+def test_district_without_evidence_is_none():
+    assert district("용산구", "") is None
+    assert district("용산구", None) is None
+
+
+def test_evidence_that_is_not_in_the_text_is_rejected():
+    assert district("용산구", "용산구에 거주하는 자만 신청 가능") is None
+
+
+def test_evidence_without_the_district_name_is_rejected():
+    """서울시 거주 · 서울시 소재 같은 문구는 구 전용이 아니다(운영 기관이 있는 구를 고른 경우)."""
+    raw = "용산구 청년창업지원센터 안내\n신청대상: 19~39세 서울시 거주 청년 창업자"
+    assert district("용산구", "19~39세 서울시 거주 청년 창업자", raw) is None
+
+
+def test_evidence_that_only_names_the_operating_institution_is_rejected():
+    raw = "구로구 청년창업지원센터가 입주기업을 모집합니다\n신청대상: 창업 7년 미만 스타트업"
+    assert district("구로구", "구로구 청년창업지원센터가 입주기업을 모집합니다", raw) is None
+
+
+@pytest.mark.parametrize("word", ["거주", "소재", "관내", "주민", "구민", "주소지", "사업장"])
+def test_each_region_word_is_accepted(word):
+    quote = f"용산구 {word} 청년"
+
+    assert district("용산구", quote, f"신청대상 {quote} 안내") == "11170"
 
 
 def test_unknown_or_missing_district_name_is_none():
-    assert program(result(district_name="없는구"))["district_code"] is None
-    assert program(result(district_name=None))["district_code"] is None
+    assert district("없는구", "없는구에 거주하는 청년", "신청대상: 없는구에 거주하는 청년") is None
+    assert district(None, GROUND) is None
 
 
 def test_nationwide_notice_ignores_district_name():
-    assert program(result(district_name="용산구"), region="전국")["district_code"] is None
+    assert district("용산구", "용산구에서 6개월 이상 거주 중이며", region="전국") is None
 
 
 def test_notice_with_known_district_keeps_it():
-    assert program(result(district_name="구로구"), district_code="11170")["district_code"] == "11170"
+    assert district("구로구", "", district_code="11170") == "11170"
 
 
 # ── 조건 트리 ──────────────────────────────────────────────────────────
@@ -270,7 +316,7 @@ def test_structure_notices_skips_response_that_is_not_an_object(no_sleep, bad):
 
 @pytest.mark.parametrize("bad", [["용산구"], {"a": 1}, 5])
 def test_non_string_district_name_is_none(bad):
-    assert program(result(district_name=bad))["district_code"] is None
+    assert program(result(district_name=bad, district_evidence="용산구 거주"))["district_code"] is None
 
 
 def test_structure_notices_of_nothing_is_empty(no_sleep):
@@ -292,9 +338,12 @@ def test_structured_programs_can_be_upserted_and_stay_unverified(conn, no_sleep)
     res = result(
         amount_max=5_000_000,
         district_name="구로구",
+        district_evidence="구로구 거주 청년",
         conditions=[[age(">=", 19), age("<=", 39)], [cond("unsupported", "==", text_value="서울시 거주")]],
     )
-    programs = structure.structure_notices([notice()], {**CODES, "종로구": "11110"}, lambda p, s: res)
+    programs = structure.structure_notices(
+        [notice(raw_text="신청대상 구로구 거주 청년 안내")], {**CODES, "종로구": "11110"}, lambda p, s: res
+    )
     before = conn.execute(text("SELECT count(*) FROM support_program")).scalar_one()
 
     assert upsert_programs(conn, programs) == 1

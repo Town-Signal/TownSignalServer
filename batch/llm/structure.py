@@ -10,6 +10,7 @@ LLM 호출은 batch.llm.client에 모여 있어서 테스트에서는 가짜로 
 import hashlib
 import time
 from collections.abc import Callable, Mapping
+from difflib import SequenceMatcher
 from typing import TYPE_CHECKING, Any
 
 from batch.llm.client import LLMUnavailable, generate_json
@@ -25,6 +26,7 @@ LIST_OPS = ("contains_any", "contains_all")
 CATEGORIES = ("외식업", "서비스업", "소매업")
 FIELDS = (*NUMBER_FIELDS, "certificates", "industry_category", "unsupported")
 LOWER_OPS, UPPER_OPS = (">", ">="), ("<", "<=")
+REGION_WORDS = ("거주", "소재", "관내", "주민", "구민", "주소지", "사업장")  # 대상이 그 구에 있다는 말
 
 PROMPT = """너는 정부·지자체 창업 지원사업 공고에서 지원금 정보와 신청 자격을 뽑는 도구다.
 공고 원문을 읽고 아래 규칙대로만 JSON을 출력한다. 원문에 없는 것은 추측하지 않는다. 애매하면 해석하지 말고 원문 문구를 그대로 둔다.
@@ -37,8 +39,11 @@ PROMPT = """너는 정부·지자체 창업 지원사업 공고에서 지원금 
  - 금액이 범위면 상한. 융자·보증은 융자 한도. "1천만 원" → 10000000, "2억" → 200000000.
  - 현금성 금액이 원문에 분명하지 않으면(교육·입주·컨설팅·행사 참가 등) 0.
  - amount_evidence: 근거가 된 원문 문구(없으면 빈 문자열).
-2. district_name
- - 이 공고가 서울의 특정 한 개 자치구 주민·기업만 대상으로 하는 것이 분명할 때만 그 구 이름(아래 목록 중 하나).
+2. district_name, district_evidence
+ - 신청 대상이 서울의 특정 한 개 자치구에 거주하거나 그 구에 소재(사업장·본사)한다고 원문에 분명히 적힌 경우만 그 구 이름(아래 목록 중 하나).
+ - 공고를 낸 기관·센터·학교가 어느 구에 있다는 사실은 대상 지역이 아니다. 예: "서울창업센터 동작", "○○구 청년창업지원센터", "○○대학교 창업보육센터"가 운영해도
+   신청 대상이 "서울시 거주"·"서울시 소재"이거나 지역 제한이 없으면 district_name은 null이다.
+ - district_evidence: 그 구에 거주·소재해야 한다고 적힌 원문 문구를 구 이름을 포함해 그대로 옮긴다. district_name이 null이면 빈 문자열.
  - 서울 전역, 전국, 여러 구, 애매하면 null. 지역 구분이 전국이면 항상 null.
  - 허용 구 이름: {districts}
 3. is_exclusive (참/거짓)
@@ -62,6 +67,9 @@ PROMPT = """너는 정부·지자체 창업 지원사업 공고에서 지원금 
  - 조건의 evidence에는 근거 원문 문구를 쓴다.
  - 신청 자격 조건이 원문에서 전혀 찾아지지 않거나 판단이 안 되면 conditions는 빈 배열이고 conditions_known은 false.
    "누구나 신청 가능" 등 조건이 없음이 원문에 분명하면 conditions는 빈 배열이고 conditions_known은 true.
+   구직자·학생·재직자·특정 분야 종사자처럼 신청 대상이 한정되어 있으면 빈 배열로 두지 말고 unsupported 조건으로 적는다.
+   예: "스타트업 취업·이직에 관심 있는 구직자를 대상" → conditions_known은 true, conditions는 [[unsupported "스타트업 취업·이직에 관심 있는 구직자"]].
+ - 상세 페이지 머리말의 "대상연령", "창업업력", "대상" 항목은 사이트가 분류한 값이므로 신청 자격으로 쓰지 않는다. 공고 본문(신청대상·모집대상 등)에 적힌 조건만 쓴다.
  - 표준 자격증 이름: {certs}
 
 ## 공고 원문
@@ -110,6 +118,7 @@ def response_schema(district_names: list[str]) -> dict[str, Any]:
         "amount_max": {"type": "integer"},
         "amount_evidence": {"type": "string"},
         "district_name": {"type": ["string", "null"], "enum": [*district_names, None]},
+        "district_evidence": {"type": "string"},
         "is_exclusive": {"type": "boolean"},
         "conditions_known": {"type": "boolean"},
         "conditions": {"type": "array", "items": {"type": "array", "items": condition}},
@@ -197,6 +206,32 @@ def build_eligibility(raw_conditions: Any, known: bool) -> dict[str, Any]:
     return {"and": nodes}
 
 
+def _nearly_in(quote: str, raw_text: str) -> bool:
+    """quote가 원문에 거의 그대로 있다. 조사 · 띄어쓰기를 조금 바꿔도 80% 이상 이어서 같으면 인정한다."""
+    text = " ".join(raw_text.split())
+    match = SequenceMatcher(None, text, quote, autojunk=False).find_longest_match(0, len(text), 0, len(quote))
+    return match.size >= 0.8 * len(quote)
+
+
+def _district_code(
+    notice: "RawNotice", result: Mapping[str, Any], district_codes: Mapping[str, str]
+) -> str | None:
+    """LLM이 고른 구를 근거 문구로 확인한 뒤 코드로 바꾼다. 확인하지 못하면 None(구 지정 없음)이다.
+
+    근거 문구가 ① 원문에 (거의 그대로) 실제로 있고 ② 구 이름을 담고 ③ 거주 · 소재 같은 말을 함께 담아야 한다.
+    기관이 있는 구를 대상 지역으로 잘못 고른 경우는 이런 문구가 없어 걸러진다.
+    """
+    name, evidence = result.get("district_name"), result.get("district_evidence")
+    if not isinstance(name, str) or not isinstance(evidence, str):
+        return None
+    quote = " ".join(evidence.split())
+    if name not in quote or not any(word in quote for word in REGION_WORDS):
+        return None
+    if not _nearly_in(quote, notice.raw_text):
+        return None
+    return district_codes.get(name)
+
+
 def to_program(
     notice: "RawNotice", result: Mapping[str, Any], district_codes: Mapping[str, str]
 ) -> dict[str, Any]:
@@ -207,8 +242,7 @@ def to_program(
     elif notice.region == "전국":
         district = None
     else:
-        name = result.get("district_name")
-        district = district_codes.get(name) if isinstance(name, str) else None
+        district = _district_code(notice, result, district_codes)
     return {
         "name": notice.title,
         "agency": notice.agency,
