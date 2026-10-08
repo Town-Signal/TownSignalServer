@@ -18,6 +18,55 @@ data/processed/
 *.csv
 !data/seed/*.csv
 
+# 데이터 파이프라인 문서 4장: 새 데이터 파일은 지정된 seed 4종만 공유한다.
+# 이미 Git에서 추적 중인 data/dev 등의 파일에는 영향을 주지 않는다.
+/data/*
+!/data/seed/
+/data/seed/*
+!/data/seed/서울_상권_자치구매핑.csv
+!/data/seed/industry_categories.csv
+!/data/seed/license_to_industry_mapping.csv
+!/data/seed/initial_support_programs.json
+
+# 문서에 지정된 배치 진입점만 새로 추가한다.
+/batch/jobs/*
+!/batch/jobs/__init__.py
+!/batch/jobs/convert_raw.py
+!/batch/jobs/build_masters.py
+!/batch/jobs/load_indicators.py
+!/batch/jobs/build_district_rent.py
+!/batch/jobs/build_support_program.py
+!/batch/jobs/train_and_predict.py
+!/batch/jobs/build_summary_cache.py
+!/batch/jobs/run_weekly.py
+
+# batch/pipeline/도 공유 구현 파일만 허용한다. 임시 데이터·검증 스크립트는 제외한다.
+# 새 공유 모듈이 필요하면 이 허용 목록에도 이름을 추가한다.
+/batch/pipeline/*
+!/batch/pipeline/__init__.py
+!/batch/pipeline/backup.py
+!/batch/pipeline/cleanup.py
+!/batch/pipeline/db.py
+!/batch/pipeline/scores.py
+!/batch/pipeline/swap.py
+!/batch/pipeline/raw_sources.py
+!/batch/pipeline/raw_conversion.py
+!/batch/pipeline/masters.py
+!/batch/pipeline/indicators.py
+!/batch/pipeline/license_mapping.py
+!/batch/pipeline/licenses.py
+!/batch/pipeline/rent.py
+
+# 이번 작업에서 생성한 로컬 검증·설치 보조 파일 (파일은 로컬에 유지).
+/requirements/preprocess.txt
+/tests/test_raw_conversion.py
+
+# 개인 실행 로그
+logs/
+*.log
+*.out
+*.err
+
 # 에디터
 .idea/
 .vscode/
