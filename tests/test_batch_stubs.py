@@ -13,7 +13,6 @@ from batch.jobs import build_summary_cache, build_support_program, train_and_pre
 STUBS = [
     (build_support_program.submit_structuring_batch, ([],)),
     (build_support_program.collect_pending_llm_results, (None,)),
-    (build_support_program.upsert_programs, (None, [])),
     (build_support_program.main, ()),
     (train_and_predict.load_training_frames, (None,)),
     (train_and_predict.train_sales_model, ({},)),

@@ -25,7 +25,9 @@ from datetime import date, datetime
 from html.parser import HTMLParser
 from typing import Any, Literal
 
-from sqlalchemy import Connection
+from sqlalchemy import Connection, text
+
+from batch.pipeline.db import transaction
 
 logger = logging.getLogger(__name__)
 
@@ -174,14 +176,73 @@ def collect_pending_llm_results(conn: Connection) -> int:
     raise NotImplementedError("LLM Batch 결과 수집은 지원사업 담당이 구현한다(4.6 ①)")
 
 
+_SAVED = (
+    "name = :name, agency = :agency, amount_max = :amount_max, district_code = :district_code, "
+    "is_exclusive = :is_exclusive, apply_start = :apply_start, apply_end = :apply_end, "
+    "eligibility = CAST(:eligibility AS jsonb), source_url = :source_url, raw_text = :raw_text, "
+    "extracted_at = now()"
+)
+# 같은 공고를 찾는 조건(4.8). 같은 키의 행이 여럿이면 program_id가 가장 작은 한 행만 쓴다.
+# 이름 · 기관으로는 주소가 없는 행끼리만 찾는다. 주소가 있는 행은 주소로만 구별한다
+# (차수가 다른 같은 이름 공고를 합치거나, 입력에 주소가 없다고 기존 행의 주소를 지우는 일을 막는다)
+_SAME_BY_URL = "source_url = :source_url"
+_SAME_BY_NAME = "source_url IS NULL AND name = :name AND agency IS NOT DISTINCT FROM CAST(:agency AS varchar)"
+
+
 def upsert_programs(conn: Connection, programs: list[dict[str, Any]]) -> int:
     """구조화된 공고를 support_program에 넣거나 갱신한다.
 
-    적재 키(4.8, 가정): source_url이 같으면 같은 공고, source_url이 없으면 name + agency.
-    갱신해도 이미 검수된 행의 verified_by는 원문이 바뀌지 않았으면 유지한다(가정 — 담당이 확정).
-    출력: 넣거나 갱신한 행 수.
+    입력: 공고 한 건당 딕셔너리. 키는 support_program 칼럼 이름이다. name · amount_max · eligibility는
+    필수(없으면 KeyError)이고 나머지는 없으면 None(is_exclusive는 False)이다. eligibility는 7.3 조건 트리
+    딕셔너리여야 한다(JSON 글자 등은 TypeError). extracted_at은 이 함수가
+    now()로 넣고, verified_by는 입력으로 받지 않는다. 그 밖의 키는 무시한다.
+    적재 키(4.8, 가정): source_url이 같으면 같은 공고. 입력에 source_url이 없으면 source_url이 없는 행 중
+    name + agency가 같은 행이 같은 공고다(주소가 있는 행은 이름 · 기관이 같아도 다른 공고로 본다).
+    갱신할 때 verified_by는 raw_text가 이전과 같으면 유지하고 다르면 비운다(가정 — 담당이 확정).
+    새 행의 verified_by는 비운다.
+    전부 한 트랜잭션이라 한 건이라도 실패하면 이 호출에서 한 일이 모두 되돌아가고 예외가 올라간다.
+    출력: 넣거나 갱신한 행 수(입력 건수).
+    한계: support_program에 source_url 유일 제약이 없어 배치가 동시에 둘 돌면 같은 공고가 중복될 수 있다.
     """
-    raise NotImplementedError("지원사업 적재는 지원사업 담당이 구현한다(4.8)")
+    with transaction(conn):
+        for p in programs:
+            # JSON 글자를 그대로 넣으면 글자 값으로 저장돼 자격 판정이 깨진다
+            if not isinstance(p["eligibility"], dict):
+                raise TypeError(f"eligibility는 딕셔너리여야 한다: {type(p['eligibility']).__name__}")
+            values = {
+                "name": p["name"],
+                "agency": p.get("agency"),
+                "amount_max": p["amount_max"],
+                "district_code": p.get("district_code"),
+                "is_exclusive": p.get("is_exclusive", False),
+                "apply_start": p.get("apply_start"),
+                "apply_end": p.get("apply_end"),
+                "eligibility": json.dumps(p["eligibility"]),
+                "source_url": p.get("source_url"),
+                "raw_text": p.get("raw_text"),
+            }
+            same = _SAME_BY_URL if values["source_url"] else _SAME_BY_NAME
+            updated = conn.execute(
+                text(
+                    f"UPDATE support_program SET {_SAVED}, "
+                    "verified_by = CASE WHEN raw_text IS NOT DISTINCT FROM CAST(:raw_text AS text) "
+                    "THEN verified_by END "
+                    f"WHERE program_id = (SELECT program_id FROM support_program WHERE {same} "
+                    "ORDER BY program_id LIMIT 1)"
+                ),
+                values,
+            ).rowcount
+            if not updated:
+                conn.execute(
+                    text(
+                        "INSERT INTO support_program (name, agency, amount_max, district_code, is_exclusive, "
+                        "apply_start, apply_end, eligibility, source_url, raw_text, extracted_at) "
+                        "VALUES (:name, :agency, :amount_max, :district_code, :is_exclusive, :apply_start, "
+                        ":apply_end, CAST(:eligibility AS jsonb), :source_url, :raw_text, now())"
+                    ),
+                    values,
+                )
+    return len(programs)
 
 
 def main() -> None:
