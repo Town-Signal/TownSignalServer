@@ -38,11 +38,15 @@ def forbid_training(monkeypatch):
     monkeypatch.setattr(build_summary_cache, "main", fail)
 
 
-def test_run_weekly_continues_after_step_failure(conn, tmp_path, forbid_training):
+def test_run_weekly_continues_after_step_failure(conn, tmp_path, monkeypatch, forbid_training):
+    def not_implemented():  # 지원사업 수집 단계가 구현 전이라 실패하는 상황을 흉내 낸다
+        raise NotImplementedError("시험용")
+
+    monkeypatch.setattr(build_support_program, "main", not_implemented)
     results = run_weekly.run(conn, now=NOW, backup_dir=str(tmp_path))
     assert [r.name for r in results] == ["지원사업 수집 · 구조화", "30일 지난 추천 정리", "지원사업표 백업"]
     collect, cleanup, backup = results
-    assert not collect.ok and collect.detail.startswith("미구현")  # 지원사업 담당 구현 전
+    assert not collect.ok and collect.detail.startswith("미구현")
     assert cleanup.ok and cleanup.detail == "1건 삭제"  # 수집이 실패해도 다음 단계는 돈다
     assert backup.ok and "pg_dump" in backup.detail and "support_program_20261012.dump" in backup.detail
     assert conn.execute(text("SELECT count(*) FROM recommendation")).scalar_one() == 0
