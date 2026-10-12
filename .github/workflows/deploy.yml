@@ -1,63 +1,121 @@
-name: Deploy API
+name: Deploy
 
-# AWS(ECR/EC2/DB) 준비 전이라 당분간 수동 실행만 가능하도록 해둠.
-# 인프라/시크릿 세팅 끝나면 트리거를 `push: branches: [ main ]`으로 바꿔서 자동 배포로 전환할 것.
+# ECR에 이미지를 올리고 EC2에서 compose.prod.yml로 교체한다(배포 v0.5 2장).
+# EC2 준비(배포 v0.5 4장) 전이라 수동 실행만. 준비가 끝나면 아래 push 트리거 주석을 풀어 develop 자동 배포로 바꾼다.
 on:
   workflow_dispatch:
+  # push:
+  #   branches: [ develop ]
+
+# 배포가 겹치지 않게 한 번에 하나만 돈다(뒤에 온 실행은 앞 실행이 끝날 때까지 기다린다)
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+# id-token: GitHub OIDC로 AWS 역할을 받는다. 저장소에 AWS 액세스 키를 두지 않는다
+permissions:
+  contents: read
+  id-token: write
 
 env:
   AWS_REGION: ap-northeast-2
-  ECR_REPOSITORY: townsignal-api
-  CONTAINER_NAME: townsignal-api
+  APP_DIR: townsignal # EC2 사용자 홈 아래 배포 폴더
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      registry: ${{ steps.ecr.outputs.registry }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2.1.7
+
+      - uses: docker/setup-buildx-action@v4.4.1
+
+      # 태그: 커밋 SHA(롤백용) + latest
+      - name: API 이미지 → ECR townsignal-api
+        uses: docker/build-push-action@v7.4.0
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/townsignal-api:${{ github.sha }}
+            ${{ steps.ecr.outputs.registry }}/townsignal-api:latest
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+
+      # 운영 배치는 주간 지원사업 작업만 돈다 → 학습 라이브러리 없는 요구사항으로 빌드
+      - name: 주간 배치 이미지 → ECR townsignal-batch
+        uses: docker/build-push-action@v7.4.0
+        with:
+          context: .
+          file: Dockerfile.batch
+          build-args: REQUIREMENTS=requirements/weekly.txt
+          push: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/townsignal-batch:${{ github.sha }}
+            ${{ steps.ecr.outputs.registry }}/townsignal-batch:latest
+          cache-from: type=gha,scope=batch
+          cache-to: type=gha,scope=batch,mode=max
+
   deploy:
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # Python 이미지 안에서 의존성을 설치하므로 빌드 단계가 따로 필요 없다.
-      # 설정값은 파일로 복원하지 않고 컨테이너 환경변수로 주입한다.
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      # compose 파일과 스키마만 서버에 둔다. .env는 서버에서 직접 관리한다
+      - name: 배포 파일 복사
+        uses: appleboy/scp-action@v1.0.0
         with:
-          aws-region: ${{ env.AWS_REGION }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_KEY }}
+          source: compose.prod.yml,db/schema.sql
+          target: ${{ env.APP_DIR }}
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build, tag, and push image to Amazon ECR
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-
-      # EC2에는 Access Key를 두지 않는다 - 인스턴스에 IAM Role(ECR Pull 권한)을 붙여서
-      # 그 역할로 자동 인증되도록 한다 (서버 탈취 시 자격증명 유출 방지).
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@master
+      # EC2는 인스턴스 IAM Role(ECR 읽기)로 로그인한다. 새 이미지를 먼저 받고(실패하면 기존 컨테이너가 그대로 남는다)
+      # 교체한 뒤 /health를 확인한다. 60초 안에 안 뜨면 직전에 성공한 태그로 되돌리고 실패 처리한다.
+      - name: EC2 교체 · 헬스체크
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_KEY }}
           script: |
-            aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
+            set -eu
+            cd ~/${{ env.APP_DIR }}
+            mkdir -p backups logs
+            export ECR_REGISTRY=${{ needs.build.outputs.registry }}
+            COMPOSE="docker compose -f compose.prod.yml"
+            NEW=${{ github.sha }}
+            PREV=$(cat .deployed_tag 2>/dev/null || echo latest)
 
-            docker rm -f ${{ env.CONTAINER_NAME }} || true
+            aws ecr get-login-password --region ${{ env.AWS_REGION }} \
+              | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+            IMAGE_TAG=$NEW $COMPOSE --profile batch pull api batch
+            IMAGE_TAG=$NEW $COMPOSE up -d db api
 
-            docker pull ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
-            docker run -d -p 8000:8000 --name ${{ env.CONTAINER_NAME }} \
-              --restart unless-stopped \
-              -e APP_ENV=prod \
-              -e TZ=Asia/Seoul \
-              -e DATABASE_URL='${{ secrets.DATABASE_URL }}' \
-              -e CORS_ORIGINS='${{ secrets.CORS_ORIGINS }}' \
-              ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+            ok=""
+            for i in $(seq 1 30); do
+              if curl -fsS http://127.0.0.1:8000/health > /dev/null; then ok=1; break; fi
+              sleep 2
+            done
+            if [ -z "$ok" ]; then
+              echo "health 확인 실패 — $PREV로 되돌린다"
+              $COMPOSE logs --tail 80 api
+              IMAGE_TAG=$PREV $COMPOSE up -d api
+              exit 1
+            fi
 
+            echo "$NEW" > .deployed_tag
             docker image prune -f
+            echo "배포 완료: $NEW"

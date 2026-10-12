@@ -1,5 +1,7 @@
-# 배치 이미지 — 학습·예측 라이브러리를 포함한다. API 이미지와 분리해 API를 가볍게 유지한다.
-# 실행 예: docker run <image> batch.jobs.build_support_program
+# 배치 이미지. 설치할 요구사항 파일을 빌드 인자로 고른다.
+#   기본(requirements/batch.txt) — 로컬 docker compose의 batch 프로필. 전처리 · 학습 라이브러리 전부
+#   운영(requirements/weekly.txt) — deploy.yml이 지정. EC2 주간 배치(run_weekly)만 돌리므로 학습 라이브러리 없음
+# 실행 예: docker run <image> batch.jobs.run_weekly
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -7,15 +9,12 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     TZ=Asia/Seoul
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
+ARG REQUIREMENTS=requirements/batch.txt
 COPY requirements/ requirements/
-RUN pip install --no-cache-dir -r requirements/batch.txt
+RUN pip install --no-cache-dir -r ${REQUIREMENTS}
 
 COPY common/ common/
 COPY batch/ batch/
 
 ENTRYPOINT ["python", "-m"]
-CMD ["batch.jobs.build_support_program"]
+CMD ["batch.jobs.run_weekly"]

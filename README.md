@@ -202,10 +202,20 @@ Windows · Python 3.13에서는 scikit-survival의 의존성(ecos)이 빌드되�
 
 ## 배포
 
-`Deploy API` 워크플로를 수동 실행하면 ECR에 이미지를 올리고 EC2에서 교체한다.
-인프라와 시크릿 구성이 끝나면 develop push 시 자동 배포로 바꾼다(배포 기준 브랜치는 develop, main은 두지 않는다).
-필요한 시크릿은 `AWS_ACCESS_KEY_ID` · `AWS_SECRET_ACCESS_KEY` · `EC2_HOST` ·
-`EC2_USERNAME` · `EC2_KEY` · `DATABASE_URL` · `CORS_ORIGINS`.
+운영은 EC2 한 대(t3.small급, 고정 IP)에 `compose.prod.yml`로 DB와 API를 띄우고, 웹은 Vercel이 서빙한다.
+웹의 `/api/*` 요청은 Vercel rewrites가 EC2 API로 넘긴다. 상세 절차는 노션 「타운시그널 배포」 v0.5.
+
+| 워크플로 | 하는 일 |
+| --- | --- |
+| `ci.yml` | 모든 PR · develop push — ruff + pytest(PostgreSQL 16 서비스). 배치 의존성 없이 |
+| `ci-batch.yml` | batch · common · requirements가 바뀐 PR만 — 배치 의존성까지 설치해 전체 테스트 |
+| `deploy.yml` | 수동 실행(EC2 준비 후 develop push 자동 배포로 전환) — ECR에 API · 주간 배치 이미지 빌드 · 푸시(커밋 SHA + latest) → EC2에서 받아 교체 → `/health` 확인, 실패하면 직전 태그로 되돌림 |
+
+- 배포 기준 브랜치는 develop이다(main은 두지 않는다).
+- AWS 인증은 GitHub OIDC로 한다(저장소에 AWS 액세스 키를 두지 않음). GitHub Secrets는 `AWS_DEPLOY_ROLE_ARN` · `EC2_HOST` · `EC2_USERNAME` · `EC2_KEY` 4개다.
+- EC2는 인스턴스 IAM Role(ECR 읽기)로 이미지를 받는다. ECR 저장소는 `townsignal-api` · `townsignal-batch`.
+- 운영 비밀값(DB 비밀번호 · LLM 키 등)은 EC2의 `~/townsignal/.env`에만 둔다. 양식은 `.env.prod.example`.
+- 운영 배치 이미지는 `requirements/weekly.txt`만 설치한다(주간 지원사업 작업). 학습은 팀원 PC에서 하고 결과 표만 SSH 터널로 적재한다.
 
 ## 커밋 규칙
 

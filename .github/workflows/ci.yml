@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ develop ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ develop ]
 
 jobs:
   test:
@@ -39,8 +39,8 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      # batch 의존성(xgboost · scikit-survival)은 설치가 무거워 CI에서 제외한다.
-      # common과 api 테스트만 돌리며, 배치 작업이 붙으면 별도 job으로 분리한다.
+      # batch 의존성(xgboost · scikit-survival 등)은 설치가 무거워 여기서는 제외한다.
+      # 배치 코드가 바뀐 PR은 ci-batch.yml이 배치 의존성까지 설치해 따로 돌린다.
       - name: Install dependencies
         run: pip install -r requirements/dev.txt
 

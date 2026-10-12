@@ -1,0 +1,74 @@
+# 운영(EC2) 전용. 로컬 개발은 docker-compose.yml을 쓴다.
+# 이미지는 GitHub Actions(deploy.yml)가 ECR에 올리고, EC2는 받아서 띄우기만 한다(빌드하지 않는다).
+# 값은 같은 폴더의 .env에서 읽는다. .env는 서버에만 두고 저장소에 올리지 않는다(.env.prod.example 참고).
+#
+#   docker compose -f compose.prod.yml up -d db api                         # 서비스
+#   docker compose -f compose.prod.yml --profile batch run --rm batch batch.jobs.run_weekly   # 주간 배치(cron)
+name: townsignal
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: townsignal
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?.env에 POSTGRES_PASSWORD가 없다}
+      POSTGRES_DB: townsignal
+      TZ: Asia/Seoul
+    # EC2 안(127.0.0.1)에서만 열린다. 팀원 PC는 SSH 터널로 붙는다(ssh -L 5432:localhost:5432 ...)
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U townsignal"]
+      interval: 5s
+      retries: 10
+    logging: *logging
+
+  api:
+    image: ${ECR_REGISTRY:?.env에 ECR_REGISTRY가 없다}/townsignal-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://townsignal:${POSTGRES_PASSWORD}@db:5432/townsignal
+      APP_ENV: prod
+      TZ: Asia/Seoul
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: *logging
+
+  batch:
+    profiles: ["batch"]
+    image: ${ECR_REGISTRY:?.env에 ECR_REGISTRY가 없다}/townsignal-batch:${IMAGE_TAG:-latest}
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://townsignal:${POSTGRES_PASSWORD}@db:5432/townsignal
+      TZ: Asia/Seoul
+      PUBLIC_DATA_API_KEY: ${PUBLIC_DATA_API_KEY:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      BACKUP_DIR: /backups
+    volumes:
+      - ./backups:/backups
+    logging: *logging
+
+volumes:
+  db-data:
