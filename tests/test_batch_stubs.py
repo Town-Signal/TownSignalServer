@@ -17,7 +17,6 @@ STUBS = [
     (llm_client.submit_batch, ([], {})),
     (llm_client.fetch_batch_results, (datetime(2026, 1, 1),)),
     (train_and_predict.train_survival_model, ({},)),
-    (train_and_predict.compute_growth, (None,)),
     (build_summary_cache.select_targets, (None,)),
     (build_summary_cache.build_prompt, ({},)),
     (build_summary_cache.request_summaries, ([],)),
