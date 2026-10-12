@@ -8,6 +8,7 @@
 | 지원사업 수집 · 구조화 · 적재 | `python -m batch.jobs.build_support_program` | 매주(run_weekly가 호출) · EC2 | `support_program` | 지원사업 담당 · **초안 구현**(LLM 호출 미연결) |
 | 자치구 임대료 집계 | (예정) `batch.jobs.build_district_rent` | 임대료 기준 분기 변경 시 · 팀원 PC | `district_rent` | 데이터 · 미작성 |
 | 학습 · 전 조합 예측 · 점수 선계산 | `python -m batch.jobs.train_and_predict` | 상권 기준 분기 변경 시 · **팀원 PC → SSH 터널** | `prediction` | AI · **모델 A 구현**(모델 B · 성장세는 골격) |
+| 추천 순위 백테스트 | `python -m batch.jobs.backtest` | 모델 재학습 때 · 팀원 PC (DB 읽기만) | 없음 — `models/backtest.json` | AI · **구현** (분석계획서 6.1 · R1) |
 | 행정동 × 업종 요약 생성 | `python -m batch.jobs.build_summary_cache` | prediction 갱신 후 · 팀원 PC | `summary_cache` | AI · **골격만** |
 | **로컬 전용** 더미 데이터 적재 | `python -m batch.jobs.load_dev_fixtures` | 필요할 때 · 로컬 | 로컬 DB 15개 표 전체 ([data/dev](../data/dev/README.md)) | 백엔드 · 구현 |
 
@@ -62,3 +63,18 @@ python -m batch.jobs.train_and_predict --write          # prediction 표까지 �
 ```bash
 docker compose --profile batch run --rm batch batch.jobs.run_weekly
 ```
+
+### backtest (분석계획서 6.1 · R1)
+
+과거 기준 분기 T 이후 데이터를 지우고 train_and_predict와 같은 코드로 순위를 만든 뒤, 지운 T+1 ~ T+2 분기의
+실제 점포당 매출 · 폐업률과 비교한다. 같은 비교를 'T 분기 실제 매출 순위'(naive)로도 해서 모델 순위가 더 나은지 본다.
+
+```bash
+python -m batch.jobs.backtest                          # 기준 = 마지막 분기 − 2
+python -m batch.jobs.backtest --cutoff 20244 --cutoff 20252
+```
+
+- 지표: 업종 안 Spearman 순위 상관 · 상위 20% 적중률(무작위면 약 0.2) · 상위/하위 20% 실제 평균 배율. 업종별로 재고 행정동 수로 가중 평균
+- 표본 부족 조합은 평가에서 빼고, 2024Q1 공간 기준 경계를 넘는 기준 분기는 거부한다
+- 결과는 `models/backtest.json`(커밋 SHA 포함). 분석계획서 실험 기록 R1 행으로 옮긴다
+
