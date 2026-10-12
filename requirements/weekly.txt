@@ -1,0 +1,9 @@
+# EC2 주간 배치(run_weekly) 전용 — 지원사업 수집 · 추천 정리. 운영 배치 이미지가 이것만 설치한다.
+# 학습 라이브러리는 넣지 않는다(학습은 팀원 PC에서 requirements/batch.txt로, 배포 v0.5 1.2).
+-r base.txt
+
+SQLAlchemy>=2.0,<3.0
+psycopg[binary]>=3.2,<4.0
+tzdata>=2024.1
+
+# LLM 호출을 연결할 때 anthropic을 추가한다(batch/llm/client.py)
