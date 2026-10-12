@@ -1,33 +1,79 @@
-"""모델 학습 · 전 조합 예측 · prediction 적재 — 담당: AI. 지금은 골격(인터페이스)만 있다.
+"""모델 학습 · 전 조합 예측 · prediction 적재 — 담당: AI. 모델 A(매출)까지 구현, 모델 B · 성장세는 골격.
 
-실행: python -m batch.jobs.train_and_predict  (팀원 PC에서, SSH 터널로 운영 DB에 적재 — 판정 38)
+실행: python -m batch.jobs.train_and_predict [--write] [--model-version xgb_v1] [--model-dir models]
+      팀원 PC에서, SSH 터널로 운영 DB에 적재 — 판정 38
 주기: 상권 원천의 기준 분기가 바뀔 때. EC2 cron에서 돌리지 않는다. 명세 6.2 ~ 6.5 · 4.6.
 
-입력 표: sales_quarterly · store_quarterly · population_quarterly · business_license · district_rent
+입력 표: sales_quarterly · store_quarterly · population_quarterly · district_rent (business_license는 모델 B)
 출력 표: prediction (행정동 × 업종, model_version별)
 
+--write 없이 돌리면 학습 · 평가 · 모델 파일 저장까지만 하고 DB는 건드리지 않는다.
 적재는 반드시 batch.pipeline.swap.replace_predictions로 한다. 그 함수가 적재 직전에 fill_scores
 (common.scoring)로 백분위 · total_score · score_rank를 채우고(판정 30), 사라진 조합 삭제와
-summary_cache 정리를 같은 트랜잭션에서 한다. 학습 라이브러리(xgboost · scikit-survival)는 이 모듈의
-함수 안에서 import한다(CI는 배치 의존성을 설치하지 않는다).
+summary_cache 정리를 같은 트랜잭션에서 한다. 학습 라이브러리(pandas · xgboost · scikit-learn)는 함수 안에서
+import한다(CI는 배치 의존성을 설치하지 않는다).
 """
 
+import argparse
+import json
 import logging
+import os
+import subprocess
+import sys
+from pathlib import Path
 from typing import Any
 
-from sqlalchemy import Connection
+from sqlalchemy import Connection, create_engine
+
+from batch import config
+from common.constants import SERVING_MODEL_VERSION
 
 logger = logging.getLogger(__name__)
 
+# TODO(가정): 모델 파일 · 지표 저장 폴더. 팀 드라이브로 옮기는 것은 사람이 한다(배포 v0.4 1.3)
+DEFAULT_MODEL_DIR = os.getenv("MODEL_DIR", "models")
+
+_QUERIES = {
+    "sales": "SELECT dong_code, industry_code, year_quarter, amount FROM sales_quarterly",
+    "stores": (
+        "SELECT dong_code, industry_code, year_quarter, store_count, franchise_count, open_count, "
+        "close_count FROM store_quarterly"
+    ),
+    "population": (
+        "SELECT dong_code, year_quarter, total, male, age_10, age_20, age_30, age_40, age_50, age_60 "
+        "FROM population_quarterly"
+    ),
+    "rent": "SELECT district_code, rent_per_sqm FROM district_rent",
+}
+
 
 def load_training_frames(conn: Connection) -> dict[str, Any]:
-    """학습 · 예측에 쓸 표들을 읽어 데이터프레임 묶음으로 돌려준다(변수정의서 · 6.2 피처)."""
-    raise NotImplementedError("학습 데이터 준비는 AI 담당이 구현한다(6.2 · 6.3)")
+    """학습 · 예측에 쓸 표들을 읽어 데이터프레임 묶음으로 돌려준다(변수정의서 3.2 피처).
+
+    출력: {"sales", "stores", "population", "rent"} → DataFrame. CHAR 칼럼의 공백은 지운다.
+    """
+    import pandas as pd
+    from sqlalchemy import text
+
+    frames = {}
+    for name, sql in _QUERIES.items():
+        df = pd.read_sql(text(sql), conn)
+        for c in ("dong_code", "industry_code", "year_quarter", "district_code"):
+            if c in df:
+                df[c] = df[c].str.strip()
+        frames[name] = df
+    return frames
 
 
 def train_sales_model(frames: dict[str, Any]) -> Any:
-    """모델 A — 점포당 분기 매출 XGBoost 분위수 회귀(p10 · p50 · p90), 시간 분할(판정 37). 6.2."""
-    raise NotImplementedError("모델 A 학습은 AI 담당이 구현한다(6.2)")
+    """모델 A — 점포당 분기 매출 XGBoost 분위수 회귀(p10 · p50 · p90), 시간 분할(판정 37). 6.2.
+
+    출력: batch.ml.sales.SalesModel(재학습된 분위수 모델 3개, CQR 보정 폭, 테스트 지표).
+    """
+    from batch.ml import sales
+
+    panel = sales.build_panel(frames["sales"], frames["stores"], frames["population"], frames["rent"])
+    return sales.train(panel)
 
 
 def train_survival_model(frames: dict[str, Any]) -> Any:
@@ -43,19 +89,127 @@ def compute_growth(conn: Connection) -> dict[tuple[str, str], tuple[float | None
 def predict_all(models: dict[str, Any], frames: dict[str, Any], model_version: str) -> list[dict[str, Any]]:
     """전 조합 예측 → prediction 행(dict) 목록. 6.5.
 
+    입력: models = {"sales": SalesModel, "survival": 없으면 생략}, frames = load_training_frames 결과
+          (+ 선택 "growth": compute_growth 결과)
     행 칼럼: dong_code · industry_code · model_version · sales_p10/p50/p90(원, 분기) ·
     survival_p10/p50/p90(개월, 소수 1자리) · growth_rate · growth_confidence.
     매출 기록이 전혀 없는 조합은 행을 만들지 않는다. 분위수는 p10 ≤ p50 ≤ p90이 되게 정렬한다(CHECK).
-    점수 칼럼은 채우지 않는다 — replace_predictions가 채운다.
+    모델 B · 성장세가 없으면 그 칼럼은 NULL이다. 점수 칼럼은 채우지 않는다 — replace_predictions가 채운다.
     """
-    raise NotImplementedError("전 조합 예측은 AI 담당이 구현한다(6.5)")
+    from batch.ml import sales
+
+    if models.get("survival") is not None:
+        raise NotImplementedError("모델 B 예측 결합은 모델 B와 함께 구현한다(6.3)")
+    panel = sales.build_panel(frames["sales"], frames["stores"], frames["population"], frames["rent"])
+    predicted = sales.predict_next(models["sales"], panel)
+    growth = frames.get("growth") or {}
+
+    rows = []
+    for r in predicted.itertuples(index=False):
+        rate, confidence = growth.get((r.dong_code, r.industry_code), (None, None))
+        rows.append(
+            {
+                "dong_code": r.dong_code,
+                "industry_code": r.industry_code,
+                "model_version": model_version,
+                "survival_p10": None,
+                "survival_p50": None,
+                "survival_p90": None,
+                "sales_p10": int(r.sales_p10),
+                "sales_p50": int(r.sales_p50),
+                "sales_p90": int(r.sales_p90),
+                "growth_rate": rate,
+                "growth_confidence": confidence,
+            }
+        )
+    return rows
 
 
-def main() -> None:
-    """load_training_frames → 학습 → predict_all → replace_predictions(conn, rows, model_version)."""
-    raise NotImplementedError("학습 · 예측 · 적재는 아직 구현 전이다(6.2 ~ 6.5)")
+def _commit_sha() -> str | None:
+    try:
+        return subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
+def _save_artifacts(model: Any, model_version: str, model_dir: str) -> Path:
+    """모델 파일과 metrics.json을 model_dir/model_version/에 남긴다(배포 v0.4 1.3 — 커밋 SHA 포함)."""
+    from batch.ml import sales
+
+    out = Path(model_dir) / model_version
+    files = sales.save(model, out)
+    report = {
+        "model_version": model_version,
+        "commit": _commit_sha(),
+        "predict_quarter": model.predict_quarter,
+        "files": [Path(f).name for f in files],
+        **model.metrics,
+    }
+    (out / "metrics.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    return out
+
+
+def run(conn: Connection, model_version: str, model_dir: str, write: bool) -> dict[str, Any]:
+    """load_training_frames → 모델 A 학습 · 평가 · 저장 → predict_all → (write면) replace_predictions."""
+    frames = load_training_frames(conn)
+    conn.commit()  # 읽기 트랜잭션을 닫는다 — 적재는 새 트랜잭션에서 한다
+
+    sales_model = train_sales_model(frames)
+    saved = _save_artifacts(sales_model, model_version, model_dir)
+    logger.info("모델 A 저장: %s", saved)
+    logger.info(
+        "모델 A 테스트(보정 후): %s", json.dumps(sales_model.metrics["test_calibrated"], ensure_ascii=False)
+    )
+
+    models: dict[str, Any] = {"sales": sales_model}
+    for name, step in (
+        ("모델 B", lambda: train_survival_model(frames)),
+        ("성장세", lambda: compute_growth(conn)),
+    ):
+        try:
+            value = step()
+        except NotImplementedError as exc:
+            logger.warning("%s 미구현 — 해당 칼럼은 NULL로 둔다: %s", name, exc)
+            continue
+        if name == "모델 B":
+            models["survival"] = value
+        else:
+            frames["growth"] = value
+
+    rows = predict_all(models, frames, model_version)
+    summary = {"predict_quarter": sales_model.predict_quarter, "rows": len(rows), "written": False}
+    if write:
+        from batch.pipeline.swap import replace_predictions
+
+        result = replace_predictions(conn, rows, model_version)
+        conn.commit()
+        summary.update(
+            written=True,
+            upserted=result.upserted,
+            deleted=result.deleted,
+            summaries_deleted=result.summaries_deleted,
+        )
+    return summary
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="모델 학습 · 전 조합 예측 · prediction 적재")
+    parser.add_argument("--model-version", default=SERVING_MODEL_VERSION)
+    parser.add_argument("--model-dir", default=DEFAULT_MODEL_DIR)
+    parser.add_argument(
+        "--write", action="store_true", help="prediction 표에 적재한다(없으면 학습 · 평가 · 저장만)"
+    )
+    args = parser.parse_args(argv)
+
+    engine = create_engine(config.DATABASE_URL)
+    with engine.connect() as conn:
+        summary = run(conn, args.model_version, args.model_dir, args.write)
+    logger.info("완료: %s", json.dumps(summary, ensure_ascii=False))
+    return 0
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    main()
+    sys.exit(main())
