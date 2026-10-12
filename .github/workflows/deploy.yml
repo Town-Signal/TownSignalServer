@@ -12,13 +12,14 @@ concurrency:
   group: deploy
   cancel-in-progress: false
 
-# id-token: GitHub OIDC로 AWS 역할을 받는다. 저장소에 AWS 액세스 키를 두지 않는다
+# AWS 인증은 배포 전용 IAM 사용자의 액세스 키(GitHub Secrets)로 한다. 그 사용자는 두 ECR 저장소에 푸시만 할 수 있다.
+# GitHub OIDC 역할이 더 안전하지만 AWS 무료 플랜(새 AWS 경험)은 IAM 자격 증명 공급자를 쓸 수 없다(배포 v0.5 4.2).
+# 플랜을 올리면 role-to-assume 방식으로 되돌리고 permissions에 id-token: write를 다시 넣는다.
 permissions:
   contents: read
-  id-token: write
 
 env:
-  AWS_REGION: ap-northeast-2
+  AWS_REGION: ap-southeast-2 # AWS 무료 플랜은 프로젝트 리전(시드니)만 쓸 수 있다(배포 v0.5 4장)
   APP_DIR: townsignal # EC2 사용자 홈 아래 배포 폴더
 
 jobs:
@@ -31,7 +32,8 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@v6.3.0
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - id: ecr
@@ -49,6 +51,7 @@ jobs:
           tags: |
             ${{ steps.ecr.outputs.registry }}/townsignal-api:${{ github.sha }}
             ${{ steps.ecr.outputs.registry }}/townsignal-api:latest
+          provenance: false # 증명(attestation) 매니페스트를 만들지 않는다 — ECR에 태그 없는 이미지로 쌓여 수명 주기 10개 한도를 잡아먹음
           cache-from: type=gha,scope=api
           cache-to: type=gha,scope=api,mode=max
 
@@ -63,14 +66,32 @@ jobs:
           tags: |
             ${{ steps.ecr.outputs.registry }}/townsignal-batch:${{ github.sha }}
             ${{ steps.ecr.outputs.registry }}/townsignal-batch:latest
+          provenance: false
           cache-from: type=gha,scope=batch
           cache-to: type=gha,scope=batch,mode=max
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    env:
+      SG_ID: ${{ vars.EC2_SECURITY_GROUP_ID }}
     steps:
       - uses: actions/checkout@v4
+
+      # 보안 그룹의 22번은 팀원 IP만 연다. GitHub 러너 IP는 매번 바뀌므로 배포하는 동안만 이 러너의 IP를 열고
+      # 끝나면(실패해도) 닫는다. 배포 IAM 사용자는 이 보안 그룹의 인바운드 규칙 추가 · 삭제만 할 수 있다(배포 v0.6 4.2).
+      - uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: 러너 IP를 SSH 허용에 잠시 추가
+        id: runner_ip
+        run: |
+          ip=$(curl -fsS https://checkip.amazonaws.com | tr -d '[:space:]')
+          echo "ip=$ip" >> "$GITHUB_OUTPUT"
+          aws ec2 authorize-security-group-ingress --group-id "$SG_ID"             --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=$ip/32,Description=github-actions-deploy}]"
 
       # compose 파일과 스키마만 서버에 둔다. .env는 서버에서 직접 관리한다
       - name: 배포 파일 복사
@@ -119,3 +140,8 @@ jobs:
             echo "$NEW" > .deployed_tag
             docker image prune -f
             echo "배포 완료: $NEW"
+
+      - name: 러너 IP를 SSH 허용에서 제거
+        if: always() && steps.runner_ip.outputs.ip != ''
+        run: |
+          aws ec2 revoke-security-group-ingress --group-id "$SG_ID"             --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${{ steps.runner_ip.outputs.ip }}/32}]"

@@ -212,7 +212,7 @@ Windows · Python 3.13에서는 scikit-survival의 의존성(ecos)이 빌드되�
 | `deploy.yml` | 수동 실행(EC2 준비 후 develop push 자동 배포로 전환) — ECR에 API · 주간 배치 이미지 빌드 · 푸시(커밋 SHA + latest) → EC2에서 받아 교체 → `/health` 확인, 실패하면 직전 태그로 되돌림 |
 
 - 배포 기준 브랜치는 develop이다(main은 두지 않는다).
-- AWS 인증은 GitHub OIDC로 한다(저장소에 AWS 액세스 키를 두지 않음). GitHub Secrets는 `AWS_DEPLOY_ROLE_ARN` · `EC2_HOST` · `EC2_USERNAME` · `EC2_KEY` 4개다.
+- AWS는 무료 플랜이라 리전은 시드니(ap-southeast-2)이고, IAM 자격 증명 공급자(OIDC)를 쓸 수 없어 배포 전용 IAM 사용자의 액세스 키로 인증한다. 그 사용자는 두 ECR 저장소에 푸시만 할 수 있다. GitHub Secrets는 `AWS_ACCESS_KEY_ID` · `AWS_SECRET_ACCESS_KEY` · `EC2_HOST` · `EC2_USERNAME` · `EC2_KEY` 5개다.
 - EC2는 인스턴스 IAM Role(ECR 읽기)로 이미지를 받는다. ECR 저장소는 `townsignal-api` · `townsignal-batch`.
 - 운영 비밀값(DB 비밀번호 · LLM 키 등)은 EC2의 `~/townsignal/.env`에만 둔다. 양식은 `.env.prod.example`.
 - 운영 배치 이미지는 `requirements/weekly.txt`만 설치한다(주간 지원사업 작업). 학습은 팀원 PC에서 하고 결과 표만 SSH 터널로 적재한다.
