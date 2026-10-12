@@ -3,6 +3,8 @@
 # 수집 · 전처리
 requests>=2.32,<3.0
 pandas>=2.2,<3.0
+pyarrow>=18.0,<26.0      # data/processed Parquet 읽기 · 쓰기
+geopandas>=1.0,<2.0      # 인허가 좌표 → 행정동 공간조인
 SQLAlchemy>=2.0,<3.0
 psycopg[binary]>=3.2,<4.0
 
