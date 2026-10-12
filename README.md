@@ -27,13 +27,13 @@ TownSignalServer/
 | --- | --- | --- | --- |
 | `support_program` | 수백 | 지원사업 금액 · 자치구 · 자격조건 트리 · 중복수혜 여부 (검수분만 매칭) | 주 1회 |
 | `district_rent` | 25 | 자치구별 ㎡당 월세 · 보증금 배수 · 신뢰도 | 기준 분기 변경 시 |
-| `prediction` | 42,600 | 행정동 426 × 업종 100. 점포당 매출 · 생존기간 구간, 성장세, 백분위 · 종합점수 | 기준 분기 변경 시 |
+| `prediction` | 최대 42,600 | 매출 기록이 있는 행정동 × 업종 조합(최대 426 × 100). 점포당 매출 · 생존기간 구간, 성장세, 백분위 · 종합점수 | 기준 분기 변경 시 |
 | `summary_cache` | 조합 수 | 행정동 × 업종 요약문 (LLM 사전 생성) | 기준 분기 변경 시 |
 
 ## 문서
 
 - 「타운시그널 시스템 구조」 (Notion) — 배치 · 요청 2단 구조, AI 모델, 데이터, 배포. 설계 문서는 노션에서만 관리한다
-- 「타운시그널 전체 명세」 v2.0 (Notion) — API · DB 스키마 · 화면 기능의 구현 기준. 문서끼리 다르면 전체 명세가 우선한다
+- 「타운시그널 전체 명세」 v2.1 (Notion) — API · DB 스키마 · 화면 기능의 구현 기준. 문서끼리 다르면 전체 명세가 우선한다
 - [db/schema.sql](db/schema.sql) — DB DDL 기준본 (전체 명세 5.3과 같다)
 
 ## 로컬 실행
@@ -186,19 +186,24 @@ ruff check .
 
 - DB 테스트는 `DATABASE_URL`로만 DB에 붙고 테스트마다 롤백한다. 개발 DB의 데이터는 바뀌지 않는다.
 - 로컬에서 DB에 붙지 못하면 DB 테스트는 skip된다. CI(GitHub Actions)는 PostgreSQL 16 서비스 컨테이너를 띄우고, DB에 붙지 못하면 skip이 아니라 실패한다.
+- 모델 학습 테스트(`tests/test_sales_model.py`)는 배치 의존성(numpy · pandas · xgboost · scikit-learn)이 있어야 돈다.
+  CI는 배치 의존성을 설치하지 않으므로 건너뛴다. 학습 코드를 고쳤으면 `requirements/batch.txt`를 설치한 PC에서 직접 돌린다.
 
 ## 의존성
 
 | 파일 | 용도 |
 | --- | --- |
 | `requirements/api.txt` | FastAPI · SQLAlchemy 등 API 실행 |
-| `requirements/batch.txt` | pandas · XGBoost · scikit-survival 등 학습 |
+| `requirements/batch.txt` | pandas · pyarrow · GeoPandas · XGBoost · scikit-survival 등 전처리 · 학습 |
 | `requirements/dev.txt` | 테스트 · 린트 (api 포함) |
+
+학습은 팀원 PC에서 하므로 PC에도 `requirements/batch.txt`를 설치한다. **Python 3.11을 쓴다** —
+Windows · Python 3.13에서는 scikit-survival의 의존성(ecos)이 빌드되지 않는 것을 확인했다.
 
 ## 배포
 
 `Deploy API` 워크플로를 수동 실행하면 ECR에 이미지를 올리고 EC2에서 교체한다.
-인프라와 시크릿 구성이 끝나면 main push 시 자동 배포로 바꾼다.
+인프라와 시크릿 구성이 끝나면 develop push 시 자동 배포로 바꾼다(배포 기준 브랜치는 develop, main은 두지 않는다).
 필요한 시크릿은 `AWS_ACCESS_KEY_ID` · `AWS_SECRET_ACCESS_KEY` · `EC2_HOST` ·
 `EC2_USERNAME` · `EC2_KEY` · `DATABASE_URL` · `CORS_ORIGINS`.
 
