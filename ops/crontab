@@ -1,0 +1,7 @@
+# 타운시그널 — 시간대 Asia/Seoul (배포 v0.6 5.2). 저장소 ops/crontab — 배포할 때마다 서버에 그대로 설치된다
+# 매주 월요일 03:00 주간 배치(지원사업 수집 · 추천 정리)
+0 3 * * 1  $HOME/townsignal/ops/weekly.sh >> $HOME/townsignal/logs/weekly.log 2>&1
+# 매주 월요일 03:30 지원사업표 백업(최근 4개 유지)
+30 3 * * 1 $HOME/townsignal/ops/backup.sh >> $HOME/townsignal/logs/backup.log 2>&1
+# 매일 04:00 쓰지 않는 도커 이미지 정리(디스크 20GB)
+0 4 * * *  docker image prune -af --filter "until=168h" >> $HOME/townsignal/logs/prune.log 2>&1

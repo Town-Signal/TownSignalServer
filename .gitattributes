@@ -1,3 +1,6 @@
 /gradlew text eol=lf
 *.bat text eol=crlf
 *.jar binary
+# 서버(리눅스)에서 실행하는 파일은 줄바꿈을 LF로 고정한다
+*.sh text eol=lf
+ops/crontab text eol=lf

@@ -93,14 +93,14 @@ jobs:
           echo "ip=$ip" >> "$GITHUB_OUTPUT"
           aws ec2 authorize-security-group-ingress --group-id "$SG_ID"             --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=$ip/32,Description=github-actions-deploy}]"
 
-      # compose 파일과 스키마만 서버에 둔다. .env는 서버에서 직접 관리한다
+      # compose 파일 · 스키마 · 운영 스크립트(ops/)만 서버에 둔다. .env는 서버에서 직접 관리한다
       - name: 배포 파일 복사
         uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_KEY }}
-          source: compose.prod.yml,db/schema.sql
+          source: compose.prod.yml,db/schema.sql,ops
           target: ${{ env.APP_DIR }}
 
       # EC2는 인스턴스 IAM Role(ECR 읽기)로 로그인한다. 새 이미지를 먼저 받고(실패하면 기존 컨테이너가 그대로 남는다)
@@ -115,6 +115,8 @@ jobs:
             set -eu
             cd ~/${{ env.APP_DIR }}
             mkdir -p backups logs
+            chmod +x ops/*.sh
+            crontab ops/crontab   # 주간 배치 · 백업 · 이미지 정리(배포 v0.6 5.2)
             export ECR_REGISTRY=${{ needs.build.outputs.registry }}
             COMPOSE="docker compose -f compose.prod.yml"
             NEW=${{ github.sha }}
