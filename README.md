@@ -11,7 +11,7 @@ TownSignalServer/
 ├── batch/      수집 · 전처리 · 모델 학습 · 점수 선계산 · 표 생성 (API로 노출하지 않는다)
 ├── common/     evaluator · budget · scoring · constants
 ├── data/       raw · processed · seed
-├── docs/       시스템 구조 문서 · 구조도
+├── docs/       구조도 그림(노션 문서가 링크로 씀) · 그림 생성 스크립트
 └── tests/
 ```
 
@@ -32,7 +32,7 @@ TownSignalServer/
 
 ## 문서
 
-- [시스템 구조 v0.9](docs/타운시그널_시스템구조_v0.9.md) — 배치 · 요청 2단 구조, AI 모델, 데이터, 배포
+- 「타운시그널 시스템 구조」 (Notion) — 배치 · 요청 2단 구조, AI 모델, 데이터, 배포. 설계 문서는 노션에서만 관리한다
 - 「타운시그널 전체 명세」 v2.0 (Notion) — API · DB 스키마 · 화면 기능의 구현 기준. 문서끼리 다르면 전체 명세가 우선한다
 - [db/schema.sql](db/schema.sql) — DB DDL 기준본 (전체 명세 5.3과 같다)
 
