@@ -41,6 +41,7 @@ models/
 !/batch/jobs/train_and_predict.py
 !/batch/jobs/build_summary_cache.py
 !/batch/jobs/run_weekly.py
+!/batch/jobs/backtest.py
 
 # batch/pipeline/도 공유 구현 파일만 허용한다. 임시 데이터·검증 스크립트는 제외한다.
 # 새 공유 모듈이 필요하면 이 허용 목록에도 이름을 추가한다.
