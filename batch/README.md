@@ -7,7 +7,7 @@
 | 주간 배치 진입점 | `python -m batch.jobs.run_weekly` | 매주 · **EC2 cron** | recommendation(정리) | 백엔드 · 구현 |
 | 지원사업 수집 · 구조화 · 적재 | `python -m batch.jobs.build_support_program` | 매주(run_weekly가 호출) · EC2 | `support_program` | 지원사업 담당 · **초안 구현**(LLM 호출 미연결) |
 | 자치구 임대료 집계 | (예정) `batch.jobs.build_district_rent` | 임대료 기준 분기 변경 시 · 팀원 PC | `district_rent` | 데이터 · 미작성 |
-| 학습 · 전 조합 예측 · 점수 선계산 | `python -m batch.jobs.train_and_predict` | 상권 기준 분기 변경 시 · **팀원 PC → SSH 터널** | `prediction` | AI · **모델 A 구현**(모델 B · 성장세는 골격) |
+| 학습 · 전 조합 예측 · 점수 선계산 | `python -m batch.jobs.train_and_predict` | 상권 기준 분기 변경 시 · **팀원 PC → SSH 터널** | `prediction` | AI · **모델 A · 성장세 구현**(모델 B는 골격) |
 | 추천 순위 백테스트 | `python -m batch.jobs.backtest` | 모델 재학습 때 · 팀원 PC (DB 읽기만) | 없음 — `models/backtest.json` | AI · **구현** (분석계획서 6.1 · R1) |
 | 행정동 × 업종 요약 생성 | `python -m batch.jobs.build_summary_cache` | prediction 갱신 후 · 팀원 PC | `summary_cache` | AI · **골격만** |
 | **로컬 전용** 더미 데이터 적재 | `python -m batch.jobs.load_dev_fixtures` | 필요할 때 · 로컬 | 로컬 DB 15개 표 전체 ([data/dev](../data/dev/README.md)) | 백엔드 · 구현 |
@@ -43,7 +43,8 @@ cron(가정: 매주 월요일 03:00 KST)이 배치 이미지로 실행한다. �
 ### train_and_predict (명세 6.2 ~ 6.5)
 
 팀원 PC에서 실행한다. 모델 A(점포당 분기 매출, XGBoost 분위수 회귀)는 `batch/ml/sales.py`에 있다.
-모델 B(생존기간, XGBoost AFT)와 성장세는 아직 골격이라 그 칼럼은 NULL로 둔다.
+성장세(growth_rate · growth_confidence)는 매출 합계의 최근 4분기 ÷ 직전 4분기 − 1이고 규칙은 `common/growth.py`(점포 수 증감과 공용)에 있다.
+모델 B(생존기간, XGBoost AFT)는 아직 골격이라 생존 칼럼은 NULL로 둔다.
 
 ```bash
 python -m batch.jobs.train_and_predict                  # 학습 · 평가 · 모델 저장만 (DB는 그대로)
@@ -54,7 +55,7 @@ python -m batch.jobs.train_and_predict --write          # prediction 표까지 �
 - 결과는 `models/<model_version>/`에 분위수별 모델(sales_q10 · q50 · q90.json)과 `metrics.json`(테스트 지표 · 분할 · 커밋 SHA)으로 남는다.
   `models/`는 저장소에 올리지 않고 팀 드라이브에 보관한다.
 - 분할은 마지막 2개 분기 = 테스트, 그 앞 2개 분기 = 검증. 2024Q1 공간 기준 경계를 넘는 시차 피처는 결측으로 둔다.
-- **모델 B 전에 운영 DB에 `--write` 하면 생존 칼럼이 전부 NULL이 되고 종합점수가 매출만으로 계산된다.**
+- **모델 B 전에 운영 DB에 `--write` 하면 생존 칼럼이 전부 NULL이 되고 종합점수가 매출 · 성장세(약 0.667 · 0.333)로 계산된다.**
 
 학습 규격과 분할 방식은 노션 「시스템 구조」 5장과 전체 명세 6장을 따른다.
 

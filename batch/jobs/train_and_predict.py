@@ -1,4 +1,4 @@
-"""모델 학습 · 전 조합 예측 · prediction 적재 — 담당: AI. 모델 A(매출)까지 구현, 모델 B · 성장세는 골격.
+"""모델 학습 · 전 조합 예측 · prediction 적재 — 담당: AI. 모델 A(매출) · 성장세 구현, 모델 B는 골격.
 
 실행: python -m batch.jobs.train_and_predict [--write] [--model-version xgb_v1] [--model-dir models]
       팀원 PC에서, SSH 터널로 운영 DB에 적재 — 판정 38
@@ -81,9 +81,34 @@ def train_survival_model(frames: dict[str, Any]) -> Any:
     raise NotImplementedError("모델 B 학습은 AI 담당이 구현한다(6.3)")
 
 
-def compute_growth(conn: Connection) -> dict[tuple[str, str], tuple[float | None, str | None]]:
-    """성장세(growth_rate · growth_confidence)를 (dong_code, industry_code)별로 선계산한다. 6.4."""
-    raise NotImplementedError("성장세 계산은 AI 담당이 구현한다(6.4)")
+# growth_rate는 NUMERIC(6,3)이라 절댓값 1000 이상은 들어가지 않는다. 직전 구간 매출이 아주 작아 비율이 터지는
+# 조합은 상한으로 자른다 — 백분위(순위)에는 '가장 크게 오름'으로 똑같이 반영된다
+GROWTH_RATE_LIMIT = 999.999
+
+
+def compute_growth(sales: Any) -> dict[tuple[str, str], tuple[float | None, str | None]]:
+    """성장세(growth_rate · growth_confidence)를 (dong_code, industry_code)별로 선계산한다. 6.4.
+
+    입력: sales_quarterly 데이터프레임(dong_code · industry_code · year_quarter · amount).
+    매출 **합계**(amount)의 최근 4분기 ÷ 직전 4분기 − 1. 2024Q1 이후 분기만 쓰고, 분기 수에 따른 구간 길이 ·
+    신뢰도와 빠진 분기 처리는 common.growth.period_change를 따른다. 최신 분기는 데이터 전체의 최신 분기다.
+    출력: {(dong_code, industry_code): (growth_rate 소수 3자리 또는 None, '높음' · '낮음' 또는 None)}.
+    """
+    from common.growth import period_change
+
+    if sales.empty:
+        return {}
+    latest = str(sales["year_quarter"].max())
+    out: dict[tuple[str, str], tuple[float | None, str | None]] = {}
+    for (dong, industry), g in sales.groupby(["dong_code", "industry_code"], sort=False):
+        pairs = zip(g["year_quarter"], g["amount"], strict=True)
+        values = {str(q): (None if a is None else float(a)) for q, a in pairs}
+        change = period_change(values, latest)
+        rate = None
+        if change.rate is not None:
+            rate = round(max(-GROWTH_RATE_LIMIT, min(GROWTH_RATE_LIMIT, change.rate)), 3)
+        out[(str(dong), str(industry))] = (rate, change.confidence if rate is not None else None)
+    return out
 
 
 def predict_all(models: dict[str, Any], frames: dict[str, Any], model_version: str) -> list[dict[str, Any]]:
@@ -166,7 +191,7 @@ def run(conn: Connection, model_version: str, model_dir: str, write: bool) -> di
     models: dict[str, Any] = {"sales": sales_model}
     for name, step in (
         ("모델 B", lambda: train_survival_model(frames)),
-        ("성장세", lambda: compute_growth(conn)),
+        ("성장세", lambda: compute_growth(frames["sales"])),
     ):
         try:
             value = step()
