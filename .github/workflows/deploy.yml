@@ -18,7 +18,7 @@ permissions:
   id-token: write
 
 env:
-  AWS_REGION: ap-northeast-2
+  AWS_REGION: ap-southeast-2 # AWS 무료 플랜은 프로젝트 리전(시드니)만 쓸 수 있다(배포 v0.5 4장)
   APP_DIR: townsignal # EC2 사용자 홈 아래 배포 폴더
 
 jobs:
