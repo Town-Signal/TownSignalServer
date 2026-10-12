@@ -1,224 +1,85 @@
 # TownSignalServer
 
-타운시그널의 파이썬 서버. API와 배치가 한 저장소에 있고 `common/`을 공유한다.
-프론트엔드는 [TownSignalFE](https://github.com/Town-Signal/TownSignalFE)에 따로 있다.
+타운시그널의 파이썬 서버(API + 배치). 프론트엔드는 [TownSignalFE](https://github.com/Town-Signal/TownSignalFE).
 
-## 구조
+- 서비스: https://town-signal.vercel.app
+- 설계 문서는 노션에만 둔다 — 「타운시그널 전체 명세」(구현 기준) · 「시스템 구조」 · 「배포」. DB 기준본은 [db/schema.sql](db/schema.sql)
+
+## 한눈에 보기
+
+배치가 서빙 표를 미리 채우고, API는 그 표를 조회해 더하고 빼기만 한다. 그래서 API에는 모델이 없고 응답이 1초 안에 끝난다.
+
+| 표 | 내용 | 채우는 곳 |
+| --- | --- | --- |
+| `support_program` | 지원사업 금액 · 자치구 · 자격조건 · 중복수혜 | 주간 배치(EC2) |
+| `district_rent` | 자치구 25곳의 ㎡당 월세 | 팀원 PC |
+| `prediction` | 행정동 × 업종 예측(매출 · 생존 구간, 성장세, 종합점수) | 팀원 PC(분기 1회 학습) |
+| `summary_cache` | 행정동 × 업종 요약문(LLM) | 팀원 PC |
 
 ```
-TownSignalServer/
-├── api/        FastAPI 동기식. 서빙 표 조회 + 사칙연산만 한다
-├── batch/      수집 · 전처리 · 모델 학습 · 점수 선계산 · 표 생성 (API로 노출하지 않는다)
-├── common/     evaluator · budget · scoring · constants
-├── data/       raw · processed · seed
-├── docs/       구조도 그림(노션 문서가 링크로 씀) · 그림 생성 스크립트
-└── tests/
+api/          FastAPI(동기). 요청 DTO는 api/schemas/에만
+batch/        수집 · 전처리 · 학습 · 표 생성 — 작업 목록은 batch/README.md
+common/       자격 판정 · 예산 · 점수 계산(순수 함수, api와 batch가 같이 씀)
+db/           schema.sql
+data/         seed · dev(더미)
+docs/         노션 문서에 들어가는 그림
+tests/
+compose.prod.yml   운영(EC2) 구성 · docker-compose.yml 로컬 구성
 ```
-
-`common/`은 프레임워크와 DB에 의존하지 않는 순수 함수만 둔다. 배치와 API가 같은 코드를
-불러 써야 배치가 만든 표와 요청 시 계산이 어긋나지 않는다. 요청 DTO는 `api/schemas/`에만 둔다.
-
-## 왜 이렇게 나누나
-
-배치가 서빙 표 네 개를 미리 채워두고, 요청 시에는 그 표를 조회해 더하고 빼기만 한다.
-그래서 API 이미지에는 모델 라이브러리가 들어가지 않고 응답이 1초 안에 끝난다.
-
-| 표 | 행 수 | 내용 | 주기 |
-| --- | --- | --- | --- |
-| `support_program` | 수백 | 지원사업 금액 · 자치구 · 자격조건 트리 · 중복수혜 여부 (검수분만 매칭) | 주 1회 |
-| `district_rent` | 25 | 자치구별 ㎡당 월세 · 보증금 배수 · 신뢰도 | 기준 분기 변경 시 |
-| `prediction` | 최대 42,600 | 매출 기록이 있는 행정동 × 업종 조합(최대 426 × 100). 점포당 매출 · 생존기간 구간, 성장세, 백분위 · 종합점수 | 기준 분기 변경 시 |
-| `summary_cache` | 조합 수 | 행정동 × 업종 요약문 (LLM 사전 생성) | 기준 분기 변경 시 |
-
-## 문서
-
-- 「타운시그널 시스템 구조」 (Notion) — 배치 · 요청 2단 구조, AI 모델, 데이터, 배포. 설계 문서는 노션에서만 관리한다
-- 「타운시그널 전체 명세」 v2.1 (Notion) — API · DB 스키마 · 화면 기능의 구현 기준. 문서끼리 다르면 전체 명세가 우선한다
-- [db/schema.sql](db/schema.sql) — DB DDL 기준본 (전체 명세 5.3과 같다)
 
 ## 로컬 실행
 
-로컬 DB는 **팀원마다 각자 PC에 따로** 생긴다. 서로 공유되지 않으므로 데이터가 필요하면 각자 적재한다.
-API와 테스트는 `.env`의 `DATABASE_URL` 하나로만 DB에 붙으므로, DB를 어떤 방법으로 띄우든 코드는 같다.
-
-| 방법 | macOS | Windows |
-| --- | --- | --- |
-| 기본 — docker compose | Docker Desktop | Docker Desktop (WSL2 백엔드) · **검증 전** |
-| 대안 — Docker 없이 | Homebrew `postgresql@16` · 검증됨 | PostgreSQL 16 공식 설치 프로그램 · **검증 전** |
-
-> docker compose 경로는 작성자 PC에 Docker가 없어 아직 직접 돌려 보지 못했다. 윈도우 절차는 모두 검증 전이다.
-> 따라 하다 막히면 고친 내용을 이 문서에 반영해 주세요.
-
-### 1. 준비
-
-- Python 3.11 (CI · Dockerfile과 같은 버전)
-- 5432 포트가 비어 있는지 확인한다. 다른 PostgreSQL이 이미 쓰고 있으면 compose의 db가 뜨지 않는다.
-
-| | macOS (zsh) | Windows (PowerShell) |
-| --- | --- | --- |
-| 5432 사용 확인 | `lsof -nP -iTCP:5432 -sTCP:LISTEN` | `Get-NetTCPConnection -LocalPort 5432 -State Listen` |
-| 가상환경 만들기 | `python3.11 -m venv .venv` | `py -3.11 -m venv .venv` |
-| 가상환경 켜기 | `source .venv/bin/activate` | `.\.venv\Scripts\Activate.ps1` |
-| 의존성 설치 | `pip install -r requirements/dev.txt` | `pip install -r requirements/dev.txt` |
-| .env 만들기 | `cp .env.example .env` | `Copy-Item .env.example .env` |
-
-- Windows에서 `Activate.ps1`이 실행 정책 때문에 막히면 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`를 한 번 실행한다.
-- `.env`의 `DATABASE_URL` 기본값(`postgresql+psycopg://townsignal:townsignal@localhost:5432/townsignal`)은 아래 두 방법 모두에 그대로 맞는다.
-
-### 2-A. 기본 — docker compose로 DB 띄우기
+Python **3.11**과 Docker가 필요하다. Windows는 Git Bash에서 아래 명령을 그대로 쓴다.
 
 ```bash
-docker compose up -d db          # PostgreSQL 16 (db 서비스)만 띄운다
-```
+python3.11 -m venv .venv && source .venv/bin/activate   # Windows: py -3.11 -m venv .venv && source .venv/Scripts/activate
+pip install -r requirements/dev.txt
+cp .env.example .env
 
-schema.sql은 처음 한 번 적용한다. PowerShell은 `<` 리다이렉션을 쓸 수 없어서 파일을 컨테이너에 복사한 뒤 `-f`로 실행한다.
-
-```bash
-# macOS (zsh)
+docker compose up -d db                                                   # PostgreSQL 16
 docker compose exec -T db psql -U townsignal -d townsignal -v ON_ERROR_STOP=1 < db/schema.sql
+python -m batch.jobs.load_dev_fixtures                                    # 더미 데이터(로컬 전용)
+
+uvicorn api.main:app --reload                                             # http://localhost:8000/docs
 ```
 
-```powershell
-# Windows (PowerShell) — 검증 전
-docker compose cp db/schema.sql db:/tmp/schema.sql
-docker compose exec db psql -U townsignal -d townsignal -v ON_ERROR_STOP=1 -f /tmp/schema.sql
-```
+- 로컬 DB는 각자 PC에 따로 생긴다. 접속 정보는 `.env.example`의 `DATABASE_URL` 그대로(`townsignal` / `townsignal`, 5432).
+- 5432 포트를 다른 PostgreSQL이 쓰고 있으면 db가 뜨지 않는다. Docker 없이 PostgreSQL 16을 직접 설치해도 되고, 같은 `DATABASE_URL`로 붙는다.
+- `load_dev_fixtures`는 `APP_ENV=local`이고 DB가 로컬일 때만 돌고, 표를 비운 뒤 더미를 넣는다.
+- 초기화: `docker compose down -v` 후 schema.sql부터 다시.
 
-테이블 확인 (두 OS 같음) — 테이블 15개, 뷰 1개(`v_extraction_accuracy`)가 나오면 된다.
+## 테스트
 
 ```bash
-docker compose exec db psql -U townsignal -d townsignal -c "\dt" -c "\dv"
+pytest -q && ruff check .
 ```
 
-초기화
+- DB 테스트는 테스트마다 롤백한다. 로컬에서 DB가 없으면 skip, CI에서는 실패한다.
+- 모델 학습 테스트는 `requirements/batch.txt`가 설치돼 있어야 돈다(기본 CI는 건너뛰고 `ci-batch`가 돌린다).
 
-```bash
-docker compose down              # 컨테이너만 내린다. DB 데이터(db-data 볼륨)는 남는다
-docker compose down -v           # 볼륨까지 지운다. 다시 띄우면 schema.sql부터 다시 적용
-```
-
-### 2-B. 대안 — Docker 없이 PostgreSQL 16 직접 설치
-
-**macOS — Homebrew**
-
-```bash
-brew install postgresql@16
-brew services start postgresql@16
-
-psql -d postgres -c "CREATE ROLE townsignal LOGIN PASSWORD 'townsignal';"
-psql -d postgres -c "CREATE DATABASE townsignal OWNER townsignal;"
-psql postgresql://townsignal:townsignal@localhost:5432/townsignal -v ON_ERROR_STOP=1 -f db/schema.sql
-psql postgresql://townsignal:townsignal@localhost:5432/townsignal -c "\dt" -c "\dv"
-```
-
-**Windows — PostgreSQL 16 공식 설치 프로그램 (검증 전)**
-
-1. postgresql.org의 Windows 설치 프로그램(EDB)으로 PostgreSQL 16을 설치한다. 포트는 5432, 설치 중 정한 `postgres` 계정 비밀번호를 기억해 둔다.
-2. `psql`이 PATH에 없으면 `C:\Program Files\PostgreSQL\16\bin`을 PATH에 추가하거나 전체 경로로 실행한다.
-3. PowerShell에서 아래를 실행한다. schema.sql에 한글(CHECK 값 · 주석)이 있어 클라이언트 인코딩을 UTF8로 먼저 맞춘다.
-
-```powershell
-$env:PGCLIENTENCODING = "UTF8"
-psql -U postgres -h localhost -c "CREATE ROLE townsignal LOGIN PASSWORD 'townsignal';"
-psql -U postgres -h localhost -c "CREATE DATABASE townsignal OWNER townsignal;"
-psql "postgresql://townsignal:townsignal@localhost:5432/townsignal" -v ON_ERROR_STOP=1 -f db/schema.sql
-psql "postgresql://townsignal:townsignal@localhost:5432/townsignal" -c "\dt" -c "\dv"
-```
-
-schema.sql의 `CREATE EXTENSION pgcrypto`는 PostgreSQL 13 이상에서 DB 소유자 권한으로 실행된다.
-권한 오류가 나면 관리자 계정으로 `psql -d townsignal -c "CREATE EXTENSION pgcrypto;"`를 먼저 실행한다.
-
-초기화는 `DROP DATABASE townsignal;` 후 `CREATE DATABASE`부터 다시 한다.
-
-### 3. DB 접속 정보
-
-| 항목 | 값 |
+| 의존성 | 용도 |
 | --- | --- |
-| 호스트 · 포트 | `localhost:5432` (compose 안에서는 `db:5432`) |
-| DB · 사용자 · 비밀번호 | `townsignal` · `townsignal` · `townsignal` |
-| DATABASE_URL | `postgresql+psycopg://townsignal:townsignal@localhost:5432/townsignal` |
-
-### 4. 더미 데이터 적재 (로컬 전용)
-
-schema.sql만 적용한 DB는 비어 있다. 화면과 API를 끝까지 돌려 보려면 `data/dev/`의 더미(실제 데이터 아님)를 넣는다.
-
-```bash
-# .env에 APP_ENV=local이 있어야 한다(.env.example을 복사했다면 이미 있음)
-python -m batch.jobs.load_dev_fixtures
-```
-
-- `APP_ENV`가 명시적으로 `local`이고 DB 호스트가 로컬(localhost · 127.0.0.1 · ::1 · db)일 때만 돈다. 아니면 거부한다.
-- 로컬 DB의 15개 표를 **모두 비우고** 다시 넣는다(로컬 추천 기록 포함). 몇 번을 돌려도 결과가 같다.
-- 더미가 아닌 행정동 · 지원사업이 있으면 지우지 않고 거부한다. 지워도 될 때만 `--force`를 붙인다.
-- 마지막에 표별 행 수와 "더미 데이터 적재 완료"가 나오면 성공이다.
-
-### 5. 테스트로 확인
-
-```bash
-pytest -q
-ruff check .
-```
-
-모두 통과하면 로컬 환경이 CI와 같게 준비된 것이다. 자세한 내용은 아래 [테스트와 린트](#테스트와-린트).
-
-### 6. API 실행
-
-가상환경을 켠 상태에서 (두 OS 같음)
-
-```bash
-uvicorn api.main:app --reload    # http://localhost:8000/docs, http://localhost:8000/health
-```
-
-docker compose로 API까지 띄우려면 `docker compose up --build`(db + api, 8000 포트)를 쓴다.
-
-배치 작업은 프로필로 분리돼 있다.
-
-```bash
-docker compose --profile batch run --rm batch batch.jobs.build_support_program
-```
-
-## 테스트와 린트
-
-```bash
-pytest -q
-ruff check .
-```
-
-- DB 테스트는 `DATABASE_URL`로만 DB에 붙고 테스트마다 롤백한다. 개발 DB의 데이터는 바뀌지 않는다.
-- 로컬에서 DB에 붙지 못하면 DB 테스트는 skip된다. CI(GitHub Actions)는 PostgreSQL 16 서비스 컨테이너를 띄우고, DB에 붙지 못하면 skip이 아니라 실패한다.
-- 모델 학습 테스트(`tests/test_sales_model.py`)는 배치 의존성(numpy · pandas · xgboost · scikit-learn)이 있어야 돈다.
-  CI는 배치 의존성을 설치하지 않으므로 건너뛴다. 학습 코드를 고쳤으면 `requirements/batch.txt`를 설치한 PC에서 직접 돌린다.
-
-## 의존성
-
-| 파일 | 용도 |
-| --- | --- |
-| `requirements/api.txt` | FastAPI · SQLAlchemy 등 API 실행 |
-| `requirements/batch.txt` | pandas · pyarrow · GeoPandas · XGBoost · scikit-survival 등 전처리 · 학습 |
-| `requirements/dev.txt` | 테스트 · 린트 (api 포함) |
-
-학습은 팀원 PC에서 하므로 PC에도 `requirements/batch.txt`를 설치한다. **Python 3.11을 쓴다** —
-Windows · Python 3.13에서는 scikit-survival의 의존성(ecos)이 빌드되지 않는 것을 확인했다.
+| `requirements/api.txt` | API |
+| `requirements/batch.txt` | 전처리 · 모델 학습(팀원 PC). Windows에서 Python 3.13은 scikit-survival 설치가 안 된다 |
+| `requirements/weekly.txt` | 운영 주간 배치 이미지(학습 라이브러리 없음) |
+| `requirements/dev.txt` | 테스트 · 린트(api 포함) |
 
 ## 배포
 
-운영은 EC2 한 대(t3.small급, 고정 IP)에 `compose.prod.yml`로 DB와 API를 띄우고, 웹은 Vercel이 서빙한다.
-웹의 `/api/*` 요청은 Vercel rewrites가 EC2 API로 넘긴다. 상세 절차는 노션 「타운시그널 배포」 v0.5.
+웹은 Vercel, API · DB는 AWS EC2 한 대(시드니)에서 `compose.prod.yml`로 돈다. 웹의 `/api/*`는 Vercel이 EC2로 넘긴다.
 
-| 워크플로 | 하는 일 |
-| --- | --- |
-| `ci.yml` | 모든 PR · develop push — ruff + pytest(PostgreSQL 16 서비스). 배치 의존성 없이 |
-| `ci-batch.yml` | batch · common · requirements가 바뀐 PR만 — 배치 의존성까지 설치해 전체 테스트 |
-| `deploy.yml` | 수동 실행(EC2 준비 후 develop push 자동 배포로 전환) — ECR에 API · 주간 배치 이미지 빌드 · 푸시(커밋 SHA + latest) → EC2에서 받아 교체 → `/health` 확인, 실패하면 직전 태그로 되돌림 |
+| 워크플로 | 언제 | 하는 일 |
+| --- | --- | --- |
+| `ci.yml` | 모든 PR · develop push | ruff + pytest |
+| `ci-batch.yml` | batch · common · requirements 변경 | 배치 의존성까지 설치해 전체 테스트 |
+| `deploy.yml` | **수동 실행**(Actions → Deploy) | 이미지를 ECR에 올리고 EC2에서 교체 → `/health` 확인, 실패하면 직전 버전으로 자동 롤백 |
 
-- 배포 기준 브랜치는 develop이다(main은 두지 않는다).
-- AWS는 무료 플랜이라 리전은 시드니(ap-southeast-2)이고, IAM 자격 증명 공급자(OIDC)를 쓸 수 없어 배포 전용 IAM 사용자의 액세스 키로 인증한다. 그 사용자는 두 ECR 저장소에 푸시만 할 수 있다. GitHub Secrets는 `AWS_ACCESS_KEY_ID` · `AWS_SECRET_ACCESS_KEY` · `EC2_HOST` · `EC2_USERNAME` · `EC2_KEY` 5개다.
-- EC2는 인스턴스 IAM Role(ECR 읽기)로 이미지를 받는다. ECR 저장소는 `townsignal-api` · `townsignal-batch`.
-- 운영 비밀값(DB 비밀번호 · LLM 키 등)은 EC2의 `~/townsignal/.env`에만 둔다. 양식은 `.env.prod.example`.
-- 운영 배치 이미지는 `requirements/weekly.txt`만 설치한다(주간 지원사업 작업). 학습은 팀원 PC에서 하고 결과 표만 SSH 터널로 적재한다.
+- 배포 브랜치는 develop 하나다(main 없음).
+- 운영 비밀값은 EC2의 `~/townsignal/.env`에만 있다(양식 `.env.prod.example`). GitHub에는 배포 접속 정보만 둔다.
+- 모델 학습은 EC2가 아니라 팀원 PC에서 하고, 결과 표만 SSH 터널로 운영 DB에 넣는다.
+- AWS가 무료 플랜이라 리전은 시드니, 인증은 배포 전용 IAM 사용자 키다. 자세한 절차 · 이유는 노션 「배포」.
 
 ## 커밋 규칙
 
-- 커밋: `<Type>(<Scope>): <Subject>` / PR 제목: `<Type>: <Subject>`
-- Type: feat · fix · docs · style · refactor · chore · todo
-- 제목은 명령조로 쓰고 날짜는 적지 않는다.
+- 커밋 `<Type>(<Scope>): <Subject>` · PR 제목 `<Type>: <Subject>`
+- Type: feat · fix · docs · style · refactor · chore · todo. 제목은 명령조, 날짜는 적지 않는다.
