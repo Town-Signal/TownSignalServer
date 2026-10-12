@@ -51,6 +51,7 @@ jobs:
           tags: |
             ${{ steps.ecr.outputs.registry }}/townsignal-api:${{ github.sha }}
             ${{ steps.ecr.outputs.registry }}/townsignal-api:latest
+          provenance: false # 증명(attestation) 매니페스트를 만들지 않는다 — ECR에 태그 없는 이미지로 쌓여 수명 주기 10개 한도를 잡아먹음
           cache-from: type=gha,scope=api
           cache-to: type=gha,scope=api,mode=max
 
@@ -65,14 +66,32 @@ jobs:
           tags: |
             ${{ steps.ecr.outputs.registry }}/townsignal-batch:${{ github.sha }}
             ${{ steps.ecr.outputs.registry }}/townsignal-batch:latest
+          provenance: false
           cache-from: type=gha,scope=batch
           cache-to: type=gha,scope=batch,mode=max
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    env:
+      SG_ID: ${{ vars.EC2_SECURITY_GROUP_ID }}
     steps:
       - uses: actions/checkout@v4
+
+      # 보안 그룹의 22번은 팀원 IP만 연다. GitHub 러너 IP는 매번 바뀌므로 배포하는 동안만 이 러너의 IP를 열고
+      # 끝나면(실패해도) 닫는다. 배포 IAM 사용자는 이 보안 그룹의 인바운드 규칙 추가 · 삭제만 할 수 있다(배포 v0.6 4.2).
+      - uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: 러너 IP를 SSH 허용에 잠시 추가
+        id: runner_ip
+        run: |
+          ip=$(curl -fsS https://checkip.amazonaws.com | tr -d '[:space:]')
+          echo "ip=$ip" >> "$GITHUB_OUTPUT"
+          aws ec2 authorize-security-group-ingress --group-id "$SG_ID"             --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=$ip/32,Description=github-actions-deploy}]"
 
       # compose 파일과 스키마만 서버에 둔다. .env는 서버에서 직접 관리한다
       - name: 배포 파일 복사
@@ -121,3 +140,8 @@ jobs:
             echo "$NEW" > .deployed_tag
             docker image prune -f
             echo "배포 완료: $NEW"
+
+      - name: 러너 IP를 SSH 허용에서 제거
+        if: always() && steps.runner_ip.outputs.ip != ''
+        run: |
+          aws ec2 revoke-security-group-ingress --group-id "$SG_ID"             --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${{ steps.runner_ip.outputs.ip }}/32}]"
