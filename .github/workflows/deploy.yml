@@ -1,11 +1,14 @@
 name: Deploy
 
-# ECR에 이미지를 올리고 EC2에서 compose.prod.yml로 교체한다(배포 v0.5 2장).
-# EC2 준비(배포 v0.5 4장) 전이라 수동 실행만. 준비가 끝나면 아래 push 트리거 주석을 풀어 develop 자동 배포로 바꾼다.
+# ECR에 이미지를 올리고 EC2에서 compose.prod.yml로 교체한다(배포 v0.6 2장).
+# develop에 push되면 CI가 통과한 커밋만 자동 배포한다(CI 실패 · 다른 브랜치는 배포하지 않는다).
+# 수동 실행(Actions → Deploy)은 다시 배포하거나 브랜치를 시험 배포할 때 쓴다.
 on:
+  workflow_run:
+    workflows: [ CI ]
+    types: [ completed ]
+    branches: [ develop ]
   workflow_dispatch:
-  # push:
-  #   branches: [ develop ]
 
 # 배포가 겹치지 않게 한 번에 하나만 돈다(뒤에 온 실행은 앞 실행이 끝날 때까지 기다린다)
 concurrency:
@@ -19,16 +22,23 @@ permissions:
   contents: read
 
 env:
+  # 배포할 커밋. 자동 배포는 CI가 검사한 커밋, 수동 실행은 고른 브랜치의 최신 커밋
+  DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
   AWS_REGION: ap-southeast-2 # AWS 무료 플랜은 프로젝트 리전(시드니)만 쓸 수 있다(배포 v0.5 4장)
   APP_DIR: townsignal # EC2 사용자 홈 아래 배포 폴더
 
 jobs:
   build:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     outputs:
       registry: ${{ steps.ecr.outputs.registry }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
 
       - uses: aws-actions/configure-aws-credentials@v6.3.0
         with:
@@ -49,7 +59,7 @@ jobs:
           file: Dockerfile
           push: true
           tags: |
-            ${{ steps.ecr.outputs.registry }}/townsignal-api:${{ github.sha }}
+            ${{ steps.ecr.outputs.registry }}/townsignal-api:${{ env.DEPLOY_SHA }}
             ${{ steps.ecr.outputs.registry }}/townsignal-api:latest
           provenance: false # 증명(attestation) 매니페스트를 만들지 않는다 — ECR에 태그 없는 이미지로 쌓여 수명 주기 10개 한도를 잡아먹음
           cache-from: type=gha,scope=api
@@ -64,7 +74,7 @@ jobs:
           build-args: REQUIREMENTS=requirements/weekly.txt
           push: true
           tags: |
-            ${{ steps.ecr.outputs.registry }}/townsignal-batch:${{ github.sha }}
+            ${{ steps.ecr.outputs.registry }}/townsignal-batch:${{ env.DEPLOY_SHA }}
             ${{ steps.ecr.outputs.registry }}/townsignal-batch:latest
           provenance: false
           cache-from: type=gha,scope=batch
@@ -77,6 +87,8 @@ jobs:
       SG_ID: ${{ vars.EC2_SECURITY_GROUP_ID }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
 
       # 보안 그룹의 22번은 팀원 IP만 연다. GitHub 러너 IP는 매번 바뀌므로 배포하는 동안만 이 러너의 IP를 열고
       # 끝나면(실패해도) 닫는다. 배포 IAM 사용자는 이 보안 그룹의 인바운드 규칙 추가 · 삭제만 할 수 있다(배포 v0.6 4.2).
@@ -119,7 +131,7 @@ jobs:
             crontab ops/crontab   # 주간 배치 · 백업 · 이미지 정리(배포 v0.6 5.2)
             export ECR_REGISTRY=${{ needs.build.outputs.registry }}
             COMPOSE="docker compose -f compose.prod.yml"
-            NEW=${{ github.sha }}
+            NEW=${{ env.DEPLOY_SHA }}
             PREV=$(cat .deployed_tag 2>/dev/null || echo latest)
 
             aws ecr get-login-password --region ${{ env.AWS_REGION }} \
