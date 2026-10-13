@@ -294,3 +294,17 @@ def survival_seed_columns() -> list[str]:
     from batch.pipeline.license_mapping import SEED_COLUMNS
 
     return SEED_COLUMNS
+
+
+def test_prob_metrics_uses_full_cohort_only():
+    end = pd.Timestamp("2025-12-31")
+    rows = [
+        # 2년 넘게 관측된 코호트: 1년 안 폐업 1 · 계속 영업 1 → 12개월 생존율 0.5
+        {"open_date": pd.Timestamp("2023-01-01"), "duration_months": 6.0, "event": 1},
+        {"open_date": pd.Timestamp("2023-01-01"), "duration_months": 35.9, "event": 0},
+        # 관측 6개월뿐 — 폐업했어도 12개월 평가에 들어가면 안 된다
+        {"open_date": pd.Timestamp("2025-07-01"), "duration_months": 2.0, "event": 1},
+    ]
+    df = pd.DataFrame(rows).assign(obs_end=end, industry_code="CS100001")
+    out = survival.prob_metrics(df, np.log(np.full(3, 20.0)), "normal", 1.0, 12)
+    assert out["rows"] == 2 and out["actual_survival"] == pytest.approx(0.5)

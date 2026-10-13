@@ -11,10 +11,13 @@
     (q − 1) 값이라 점포 자신이 섞이지 않는다(변수정의서 4.2). 2021년 이전 개업은 상권 지표가 없어 결측
   - 인허가 이력(HISTORY): 개업일 이전 기록만으로 만든 같은 행정동 · 업종의 경쟁 진입 · 영업 점포 수 ·
     과거 1년 내 폐업률. 상권 지표가 없는 2021년 이전 개업에도 값이 있다
-- 학습 시작: 2021년 이후 개업만 쓰는 안과 TRAIN_START_EARLY 이후 개업까지 쓰는 안을 검증 C-index로 고른다.
+- 학습 시작: 2021년 이후 개업만 쓰는 안과 TRAIN_START_EARLY 이후 개업까지 쓰는 안을
+  같은 검증 로그우도로 고른다.
   오래 관측된 점포가 들어가야 5년 넘는 생존기간을 외삽 없이 배운다.
 - 분할: 개업 연도 — 학습 ~ 2022, 검증 2023, 테스트 2024 이후(판정 37).
-- 분포 · 폭: DISTRIBUTIONS × SCALES 중 검증 Harrell C-index가 가장 높은 조합.
+- 분포 · 폭: DISTRIBUTIONS × SCALES 중 검증 음의 로그우도(aft-nloglik)가 가장 낮은 조합.
+  C-index는 순위만 보므로 폭(σ)이 바뀌어도 거의 그대로라 폭을 고르지 못한다.
+  생존 확률 · 구간이 실제와 맞는지는 로그우도가 반영한다.
 - 출력: 분위수 q의 생존기간 = exp(μ + σ · z_q)와 h개월 생존 확률 S(h) = 1 − F((ln h − μ) ÷ σ).
   모든 조합이 같은 σ를 써서 어느 분위수 · 확률로 줄 세워도 순서가 같다.
 - 전 조합 예측: 패널의 다음 분기 행(최신 지표)과 관측 종료일 기준 인허가 이력으로 '지금 개업하는 점포'를
@@ -318,11 +321,12 @@ def within_industry_c(df: pd.DataFrame, predicted: np.ndarray) -> float:
 def prob_metrics(df: pd.DataFrame, mu: np.ndarray, distribution: str, scale: float, months: float) -> dict:
     """h개월 생존 확률의 Brier · AUC · 보정(평균 예측 vs 실제).
 
-    h개월 전에 절단돼 결과를 모르는 점포는 뺀다.
+    관측 종료일까지 h개월이 지난 개업(코호트)만 쓴다. '폐업했거나 h개월 넘게 버틴 점포'로 고르면 아직 h개월이
+    안 된 최근 개업 중 폐업한 점포만 들어가 생존율이 낮게 잡힌다.
     """
     t = df["duration_months"].to_numpy()
-    e = df["event"].to_numpy() == 1
-    known = (t >= months) | e
+    followed = (df["obs_end"] - df["open_date"]).dt.days.to_numpy() / DAYS_PER_MONTH
+    known = followed >= months
     if known.sum() == 0:
         return {"rows": 0}
     alive = (t[known] > months).astype(float)  # 폐업했어도 h개월 뒤라면 h 시점엔 영업 중
@@ -450,6 +454,7 @@ def _search_one(tr, va, dist, scale, start) -> dict[str, Any]:
         "distribution": dist,
         "scale": scale,
         "valid_c_index": c,
+        "valid_nloglik": float(booster.best_score),
         "rounds": booster.best_iteration + 1,
         "booster": booster,
     }
@@ -487,10 +492,10 @@ def train(
         raise ValueError(f"개업 연도 분할에 빈 구간이 있다({sizes})")
 
     search = [_search_one(tr0, va, d, s, starts[0]) for d in DISTRIBUTIONS for s in SCALES]
-    first = max(search, key=lambda s: s["valid_c_index"])
+    first = min(search, key=lambda s: s["valid_nloglik"])
     for start in starts[1:]:
         search.append(_search_one(train_part(start), va, first["distribution"], first["scale"], start))
-    best = max(search, key=lambda s: s["valid_c_index"])
+    best = min(search, key=lambda s: s["valid_nloglik"])
     start = date.fromisoformat(best["train_start"])
     tr = train_part(start)
 
@@ -518,6 +523,11 @@ def train(
             "rounds": best["rounds"],
         },
         "test": evaluate(te, mu_test, best["distribution"], best["scale"]),
+        # 테스트(2024년 이후 개업)는 3년이 안 지나 3년 생존 확률은 검증 코호트(2023년 개업)로 본다.
+        # 검증은 분포 · 폭 선택에 쓰였으므로 약간 낙관적인 값이다
+        "valid_survival_prob_36m": prob_metrics(
+            va, _mu(best["booster"], va), best["distribution"], best["scale"], 36
+        ),
     }
     if baselines:
         metrics["baselines_test"] = _baselines(tr, te)
