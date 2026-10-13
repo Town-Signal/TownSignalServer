@@ -60,7 +60,12 @@ def test_prediction_ok_uses_stored_values(api_client, dummy_db):
         xgb["sales_p50"] // 3,
         xgb["sales_p90"] // 3,
     )
-    assert data["survival_p50"] == float(xgb["survival_p50"])
+    # 판정 6: 생존은 1 · 3년 확률(prediction 값 그대로), 개월 필드는 늘 null
+    assert (data["survival_prob_1y"], data["survival_prob_3y"]) == (
+        float(xgb["survival_prob_1y"]),
+        float(xgb["survival_prob_3y"]),
+    )
+    assert data["survival_p10"] is data["survival_p50"] is data["survival_p90"] is None
     assert data["total_score"] == data["score_breakdown"]["total_score"] == float(xgb["total_score"])
     assert data["score_breakdown"]["sales_percentile"] == float(xgb["sales_percentile"])
     assert data["data_status"] == "정상" and data["store_count_avg"] >= 5
@@ -76,6 +81,8 @@ def test_prediction_no_row_is_200_null(api_client):
         "sales_quarterly_p50",
         "sales_monthly_p50",
         "survival_p50",
+        "survival_prob_1y",
+        "survival_prob_3y",
         "growth_rate",
         "total_score",
         "score_breakdown",
@@ -90,6 +97,16 @@ def test_prediction_no_store_dong(api_client):
     data = success(predict(api_client, CHEONGUN))["data"]  # 점포 · 매출 · 예측 모두 없음
     assert data["data_status"] == "예측 불가"
     assert (data["store_count_avg"], data["store_count_latest"], data["store_level"]) == (None, None, None)
+
+
+def test_prediction_survival_null_for_uncovered_industry(api_client, dummy_db):
+    """판정 42: 생존 예측 대상이 아닌 업종(편의점)은 예측 행이 있어도 확률이 null, data_status는 매출 기준."""
+    data = success(predict(api_client, SILLIM, "CS300002"))["data"]
+    assert stored(dummy_db, SILLIM, "CS300002") is not None
+    assert data["data_status"] == "정상" and data["sales_monthly_p50"] is not None
+    assert data["survival_prob_1y"] is None and data["survival_prob_3y"] is None
+    assert data["score_breakdown"]["survival_percentile"] is None
+    assert data["score_breakdown"]["applied_weights"]["survival"] == 0.0
 
 
 def test_prediction_sample_short(api_client):
@@ -357,6 +374,10 @@ def test_rankings_order_and_stored_rank(api_client, dummy_db):
         if p:
             assert item["total_score"] == float(p["total_score"])
             assert item["sales_monthly_p50"] == p["sales_p50"] // 3
+            assert item["survival_prob_1y"] == float(p["survival_prob_1y"])
+            assert item["survival_prob_3y"] == float(p["survival_prob_3y"])
+        else:
+            assert item["survival_prob_1y"] is None and item["survival_prob_3y"] is None
     ranks_in_order = [i["rank"] for i in data["items"] if i["rank"] is not None]
     assert ranks_in_order == list(range(1, len(ranks_in_order) + 1))  # 목록 순서 = rank, 빈틈 없음
 
@@ -460,6 +481,9 @@ def test_compare_order_and_values(api_client, dummy_db):
         assert item["sales_quarterly_range"] == [p["sales_p10"], p["sales_p90"]]
         assert item["sales_monthly_p50"] == p["sales_p50"] // 3
         assert item["sales_monthly_range"] == [p["sales_p10"] // 3, p["sales_p90"] // 3]
+        assert item["survival_prob_1y"] == float(p["survival_prob_1y"])
+        assert item["survival_prob_3y"] == float(p["survival_prob_3y"])
+        assert item["survival_p50"] is None and item["survival_range"] == [None, None]
         assert item["budget_margin"] is None and item["passed"] is None  # rec_id 없음
         assert item["store_count"] > 0 and item["total_population"] > 0
     assert items[0]["estimated_rent_cost"] == items[1]["estimated_rent_cost"] == 16_929_000  # 같은 구 · 33㎡
@@ -506,6 +530,7 @@ def test_compare_includes_unpredicted(api_client):
         None,
         None,
     )
+    assert item["survival_prob_1y"] is None and item["survival_prob_3y"] is None
     assert item["estimated_rent_cost"] is not None  # 임대료는 자치구 값으로 보인다
 
 

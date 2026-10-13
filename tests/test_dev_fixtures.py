@@ -244,7 +244,20 @@ def test_growth_null_and_low_cases(t):
 def test_intervals_are_ordered(t):
     for p in t["prediction"]:
         assert p["sales_p10"] <= p["sales_p50"] <= p["sales_p90"]
-        assert p["survival_p10"] <= p["survival_p50"] <= p["survival_p90"]
+
+
+def test_survival_is_probability_for_covered_industries_only(t):
+    """판정 6 · 42 — 생존기간 개월은 모두 NULL, 1 · 3년 생존 확률은 대상 업종(한식 · 커피 · 분식)에만."""
+    covered = {"CS100001", "CS100010", "CS100008"}
+    for p in t["prediction"]:
+        assert p["survival_p10"] is p["survival_p50"] is p["survival_p90"] is None
+        if p["industry_code"] in covered:
+            assert 0 <= p["survival_prob_3y"] <= p["survival_prob_1y"] <= 1  # chk_pred_survival_prob
+            assert p["survival_prob_1y"] == p["survival_prob_1y"].quantize(Decimal("0.001"))
+            assert p["survival_percentile"] is not None
+        else:
+            assert p["survival_prob_1y"] is None and p["survival_prob_3y"] is None
+            assert p["survival_percentile"] is None
 
 
 def test_extra_model_rows(t):
@@ -271,11 +284,11 @@ def test_scores_match_independent_common_calculation(t):
         groups.setdefault((p["industry_code"], p["model_version"]), []).append(p)
     assert len(groups) == 8  # 7업종 × xgb_v1 + CS100001 × mlp_v1
     for rows in groups.values():
-        population = {col: [r[col] for r in rows] for col in ("sales_p50", "survival_p50", "growth_rate")}
+        population = {col: [r[col] for r in rows] for col in ("sales_p50", "survival_prob_3y", "growth_rate")}
         for r in rows:
             pct = {
                 "sales": _q4(percent_rank(population["sales_p50"], r["sales_p50"])),
-                "survival": _q4(percent_rank(population["survival_p50"], r["survival_p50"])),
+                "survival": _q4(percent_rank(population["survival_prob_3y"], r["survival_prob_3y"])),
                 "growth": _q4(percent_rank(population["growth_rate"], r["growth_rate"])),
             }
             assert (r["sales_percentile"], r["survival_percentile"], r["growth_percentile"]) == (
@@ -288,14 +301,26 @@ def test_scores_match_independent_common_calculation(t):
         assert all(a["total_score"] >= b["total_score"] for a, b in zip(ordered, ordered[1:], strict=False))
 
 
-def test_growth_null_industry_redistributes_to_sales_and_survival(t):
-    """성장세가 없으면 매출 · 생존이 0.6 : 0.3 비율로 나눠 갖는다(2/3 · 1/3)."""
+def test_growth_null_industry_without_survival_is_sales_only(t):
+    """외국어학원은 성장세도 생존(대상 업종 아님)도 없어 매출 백분위만으로 점수를 낸다(가중치 1.0)."""
     for p in _xgb(t):
         if p["industry_code"] == "CS200002":
+            assert p["growth_percentile"] is None and p["survival_percentile"] is None
+            expected = (p["sales_percentile"] * 100).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+            assert abs(p["total_score"] - expected) <= Decimal("0.1")
+
+
+def test_growth_null_dong_redistributes_to_sales_and_survival(t):
+    """성장세만 없으면 매출 · 생존이 0.6 : 0.3 비율로 나눠 갖는다(2/3 · 1/3) — 망원1동 × 한식."""
+    for p in _xgb(t):
+        if p["dong_code"] == "11440903" and p["industry_code"] == "CS100001":
             raw = (p["sales_percentile"] * 200 / 3 + p["survival_percentile"] * 100 / 3).quantize(
                 Decimal("0.1"), rounding=ROUND_HALF_UP
             )
             assert abs(p["total_score"] - raw) <= Decimal("0.1")
+            break
+    else:
+        raise AssertionError("망원1동 × 한식 예측 행이 없다")
 
 
 # ── 8 · 9 결정성 · 더미 표식 ─────────────────────────────────

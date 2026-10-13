@@ -32,8 +32,11 @@ class DongRankResult(BaseModel):
     sales_quarterly_p50: int | None
     sales_quarterly_range: tuple[int | None, int | None]  # (p10, p90) — 80% 범위
     sales_monthly_p50: int | None  # sales_quarterly_p50 // 3
-    survival_p50: float | None  # 개월
+    survival_p50: float | None  # 개월. v2.2부터 늘 null(판정 6), 명세 8 · 9장을 고칠 때 정리
     survival_range: tuple[float | None, float | None]
+    # TODO(가정): 1 · 3년 생존 확률(0~1, 소수 3자리, 판정 6). 명세 8 · 9장에 없음, 이름은 DB 칼럼과 같게
+    survival_prob_1y: float | None
+    survival_prob_3y: float | None
     growth_rate: float | None = None
     growth_confidence: GrowthConfidence | None = None
     data_status: DataStatus
@@ -80,6 +83,9 @@ class RecItemResult(BaseModel):
     total_score: float | None
     survival_p50: float | None
     survival_range: tuple[float | None, float | None]
+    # TODO(가정): 1 · 3년 생존 확률(0~1, 소수 3자리, 판정 6). 명세 8 · 9장에 없음, 이름은 DB 칼럼과 같게
+    survival_prob_1y: float | None
+    survival_prob_3y: float | None
     sales_p50: int | None  # 9장 필드(분기)
     sales_monthly_p50: int | None
     sales_monthly_range: tuple[int | None, int | None]

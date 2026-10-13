@@ -100,6 +100,8 @@ def execute(session: Session, req: RecommendationExecuteRequest) -> Recommendati
                 sales_monthly_range=(quarterly_to_monthly(p.sales_p10), quarterly_to_monthly(p.sales_p90)),
                 survival_p50=_float(p.survival_p50),
                 survival_range=(_float(p.survival_p10), _float(p.survival_p90)),
+                survival_prob_1y=_float(p.survival_prob_1y),
+                survival_prob_3y=_float(p.survival_prob_3y),
                 growth_rate=_float(p.growth_rate),
                 growth_confidence=p.growth_confidence,
                 data_status=status,
@@ -182,6 +184,8 @@ def snapshot(session: Session, rec_id: uuid.UUID) -> RecommendationSnapshot:
                 total_score=_float(p.total_score) if p else None,
                 survival_p50=_float(p.survival_p50) if p else None,
                 survival_range=(_float(p.survival_p10), _float(p.survival_p90)) if p else (None, None),
+                survival_prob_1y=_float(p.survival_prob_1y) if p else None,
+                survival_prob_3y=_float(p.survival_prob_3y) if p else None,
                 sales_p50=p.sales_p50 if p else None,
                 sales_monthly_p50=quarterly_to_monthly(p.sales_p50) if p else None,
                 sales_monthly_range=(

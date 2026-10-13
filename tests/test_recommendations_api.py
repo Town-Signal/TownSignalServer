@@ -12,7 +12,6 @@
 
 import uuid
 from datetime import datetime
-from decimal import Decimal
 
 import pytest
 from sqlalchemy import text
@@ -126,7 +125,23 @@ def test_execute_scores_are_stored_values_not_mlp(api_client, dummy_db):
             float(stored["sales_percentile"]), float(stored["survival_percentile"]),
         )
         assert r["sales_quarterly_p50"] == stored["sales_p50"]
-        assert r["survival_p50"] == float(stored["survival_p50"])
+        # 판정 6: 생존은 1 · 3년 확률. 개월 필드는 남아 있지만 늘 null
+        assert r["survival_prob_1y"] == float(stored["survival_prob_1y"])
+        assert r["survival_prob_3y"] == float(stored["survival_prob_3y"])
+        assert r["survival_p50"] is None and r["survival_range"] == [None, None]
+
+
+def test_execute_survival_null_for_uncovered_industry(api_client):
+    """판정 42: 생존 예측 대상이 아닌 업종(편의점)은 확률이 null이고 가중치는 매출 · 성장세로 재배분."""
+    step2 = budgets(api_client, industry_code="CS300002", certificates=[])
+    rows = recommend(api_client, step2["rec_id"], top_k=50)["data"]["recommendations"]
+    assert rows
+    for r in rows:
+        assert r["survival_prob_1y"] is None and r["survival_prob_3y"] is None
+        b = r["score_breakdown"]
+        assert b["survival_percentile"] is None
+        if r["growth_rate"] is not None:
+            assert b["applied_weights"] == {"sales": 0.8571, "survival": 0.0, "growth": 0.1429}
 
 
 def test_execute_monthly_sales_and_ranges(api_client, dummy_db):
@@ -137,7 +152,7 @@ def test_execute_monthly_sales_and_ranges(api_client, dummy_db):
         assert r["sales_quarterly_range"] == [p["sales_p10"], p["sales_p90"]]
         assert r["sales_monthly_p50"] == p["sales_p50"] // 3
         assert r["sales_monthly_range"] == [p["sales_p10"] // 3, p["sales_p90"] // 3]
-        assert r["survival_range"] == [float(p["survival_p10"]), float(p["survival_p90"])]
+        assert r["survival_range"] == [None, None]  # 개월 p10 · p90은 적재하지 않는다(판정 6)
 
 
 def test_execute_top_k_default_20_and_max_50(api_client, dummy_db):
@@ -196,7 +211,7 @@ def test_execute_saves_and_replaces_rec_items(api_client, dummy_db):
             r["rank_no"],
             r["dong_code"],
             r["budget_margin"],
-            Decimal(str(r["survival_p50"])),
+            r["survival_p50"],  # 판정 6 이후 늘 NULL — rec_item 칼럼은 schema.sql 그대로 둔다
             r["sales_quarterly_p50"],
         )
         for r in rows
@@ -301,6 +316,10 @@ def test_snapshot_items_match_rec_item(api_client):
     assert first["sales_monthly_p50"] == rows[0]["sales_monthly_p50"]
     assert first["sales_p50"] == rows[0]["sales_quarterly_p50"]
     assert first["data_status"] == rows[0]["data_status"]
+    assert (first["survival_prob_1y"], first["survival_prob_3y"]) == (
+        rows[0]["survival_prob_1y"], rows[0]["survival_prob_3y"],
+    )
+    assert first["survival_prob_3y"] is not None  # 한식음식점은 생존 대상 업종
 
 
 def test_snapshot_uses_rec_item_rank_and_latest_prediction(api_client, dummy_db):
@@ -321,7 +340,10 @@ def test_snapshot_uses_rec_item_rank_and_latest_prediction(api_client, dummy_db)
     gone = items[second]
     assert (gone["rank_no"], gone["budget_margin"]) == (2, rows[1]["budget_margin"])
     assert gone["data_status"] == "예측 불가"
-    for key in ("total_score", "survival_p50", "sales_p50", "sales_monthly_p50", "growth_rate"):
+    for key in (
+        "total_score", "survival_p50", "survival_prob_1y", "survival_prob_3y",
+        "sales_p50", "sales_monthly_p50", "growth_rate",
+    ):
         assert gone[key] is None, key
     assert gone["sales_monthly_range"] == [None, None]
 

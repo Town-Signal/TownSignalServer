@@ -223,6 +223,7 @@ def _predictions(fx: Fixtures) -> None:
     growth_null_dongs = set(cases["growth_null_dongs"]["dongs"])
     growth_low = set(cases["growth_low_dongs"]["dongs"])
     extra = cases["extra_model"]
+    survival_covered = set(cases["survival_covered_industries"]["industries"])
 
     # 예측은 매출 기록이 있는 조합에만 만든다(6.5). 점포당 매출 = amount ÷ store_count, 최근 4분기 평균
     stores = {(r["dong_code"], r["industry_code"], r["year_quarter"]): r["store_count"]
@@ -238,7 +239,6 @@ def _predictions(fx: Fixtures) -> None:
     for (dong, ind), values in per_store.items():
         p50 = sum(values) / len(values)
         rng = _rng("prediction", dong, ind)
-        survival = _round_to(rng.uniform(20, 70), "0.1")
         has_growth = ind not in growth_null_ind and dong not in growth_null_dongs
         growth = _round_to(rng.uniform(-0.10, 0.20), "0.001") if has_growth else None
         base = {
@@ -247,30 +247,54 @@ def _predictions(fx: Fixtures) -> None:
             "growth_rate": growth,
             "growth_confidence": None if growth is None else ("낮음" if dong in growth_low else "높음"),
         }
-        rows.append({**base, "model_version": cases["serving_model_version"], **_intervals(p50, survival)})
+        covered = ind in survival_covered
+        rows.append(
+            {
+                **base,
+                "model_version": cases["serving_model_version"],
+                **_intervals(p50),
+                **_survival_probs(rng, covered),
+            }
+        )
         if ind in extra["industries"]:  # 서빙하지 않는 비교 모델(mlp_v1)
             mlp = _rng("prediction-mlp", dong, ind)
             rows.append(
                 {
                     **base,
                     "model_version": extra["model_version"],
-                    **_intervals(p50 * mlp.uniform(0.9, 1.1), _round_to(mlp.uniform(20, 70), "0.1")),
+                    **_intervals(p50 * mlp.uniform(0.9, 1.1)),
+                    **_survival_probs(mlp, covered),
                 }
             )
     fx.tables["prediction"] = fill_scores(rows)
 
 
-def _intervals(sales_p50: float, survival_p50: Decimal) -> dict[str, Any]:
-    """80% 예측구간(p10 · p50 · p90). 최소 · 최대가 아니다."""
+def _intervals(sales_p50: float) -> dict[str, Any]:
+    """매출 80% 예측구간(p10 · p50 · p90). 최소 · 최대가 아니다.
+
+    생존기간 개월(p10 · p50 · p90)은 실제 배치처럼 비운다(전체 명세 6.3 · 판정 6).
+    """
     p50 = _thousand(sales_p50)
     return {
         "sales_p10": _thousand(p50 * 0.7),
         "sales_p50": p50,
         "sales_p90": _thousand(p50 * 1.35),
-        "survival_p10": _round_to(survival_p50 * Decimal("0.6"), "0.1"),
-        "survival_p50": survival_p50,
-        "survival_p90": _round_to(survival_p50 * Decimal("1.5"), "0.1"),
+        "survival_p10": None,
+        "survival_p50": None,
+        "survival_p90": None,
     }
+
+
+def _survival_probs(rng: random.Random, covered: bool) -> dict[str, Decimal | None]:
+    """1 · 3년 생존 확률(판정 6). 생존 예측 대상이 아닌 업종은 NULL(판정 42).
+
+    3년 = 1년 × (0.55 ~ 0.85)라 늘 0 ≤ 3년 ≤ 1년 ≤ 1이다(chk_pred_survival_prob).
+    """
+    if not covered:
+        return {"survival_prob_1y": None, "survival_prob_3y": None}
+    one = _round_to(rng.uniform(0.70, 0.95), "0.001")
+    three = _round_to(one * Decimal(str(rng.uniform(0.55, 0.85))), "0.001")
+    return {"survival_prob_1y": one, "survival_prob_3y": three}
 
 
 def _summaries(fx: Fixtures) -> None:

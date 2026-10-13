@@ -23,6 +23,10 @@
     "case": "표본 부족 조합",
     "combos": [["11350901", "CS200002"]]
   },
+  "survival_covered_industries": {
+    "case": "생존 예측 대상 업종(판정 42 — 실데이터 인허가 커버 15개에 드는 업종). 1 · 3년 생존 확률을 채우고, 그 밖의 업종은 NULL(종합점수는 매출 · 성장세로 재배분)",
+    "industries": ["CS100001", "CS100010", "CS100008"]
+  },
   "growth_null_industries": {
     "case": "growth_rate NULL — 업종 전체(종합점수 매출 50 · 생존 50으로 재배분)",
     "industries": ["CS200002"]

@@ -164,6 +164,9 @@ class PredictionResponse(BaseModel):
     survival_p10: float | None
     survival_p50: float | None
     survival_p90: float | None
+    # TODO(가정): 1 · 3년 생존 확률(0~1, 소수 3자리, 판정 6). 명세 8 · 9장에 없음, 이름은 DB 칼럼과 같게
+    survival_prob_1y: float | None
+    survival_prob_3y: float | None
     growth_rate: float | None
     growth_confidence: GrowthConfidence | None
     store_count_avg: float | None  # 최근 4개 분기 평균 점포 수
@@ -221,6 +224,9 @@ class CompareItem(BaseModel):
     sales_quarterly_range: tuple[int | None, int | None] | None
     survival_p50: float | None
     survival_range: tuple[float | None, float | None] | None
+    # TODO(가정): 1 · 3년 생존 확률(0~1, 소수 3자리, 판정 6). 명세 8 · 9장에 없음, 이름은 DB 칼럼과 같게
+    survival_prob_1y: float | None
+    survival_prob_3y: float | None
     growth_rate: float | None
     rent_per_sqm: float | None
     monthly_rent: int | None  # 원/월, 임대료 없으면 null. TODO(가정): 명세 8.6에 없음, 보강 요청
@@ -258,6 +264,9 @@ class RankingItem(BaseModel):
     geo_code: str | None
     total_score: float | None
     survival_p50: float | None
+    # TODO(가정): 1 · 3년 생존 확률(0~1, 소수 3자리, 판정 6). 명세 8 · 9장에 없음, 이름은 DB 칼럼과 같게
+    survival_prob_1y: float | None
+    survival_prob_3y: float | None
     sales_monthly_p50: int | None
     growth_rate: float | None
     store_count_latest: int | None
