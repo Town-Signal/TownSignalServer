@@ -20,6 +20,7 @@ import logging
 import os
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -44,13 +45,11 @@ _QUERIES = {
         "FROM population_quarterly"
     ),
     "rent": "SELECT district_code, rent_per_sqm FROM district_rent",
-    # 모델 B — 2021년 이후 개업 · 행정동 · 업종 매핑 성공 점포만(6.3).
-    # 관측 종료일은 전체 인허가의 마지막 날짜로 잡는다
+    # 모델 B — 행정동 · 업종 매핑 성공 점포 전체. 2021년 이전 개업도 인허가 이력 피처와 학습 후보에 쓴다(6.3)
     "licenses": (
         "SELECT dong_code, industry_code, open_date, close_date FROM business_license "
-        "WHERE open_date >= DATE '2021-01-01' AND dong_code IS NOT NULL AND industry_code IS NOT NULL"
+        "WHERE dong_code IS NOT NULL AND industry_code IS NOT NULL"
     ),
-    "license_dates": "SELECT max(open_date) AS max_open, max(close_date) AS max_close FROM business_license",
 }
 
 
@@ -83,13 +82,11 @@ def _panel(frames: dict[str, Any]) -> Any:
     return frames["panel"]
 
 
-def _obs_end(frames: dict[str, Any]) -> Any:
-    """관측 종료일 = 인허가 원천의 마지막 개업 · 폐업일(추출일 근사, 변수정의서 4.1). 없으면 None."""
-    dates = frames.get("license_dates")
-    if dates is None or dates.empty:
-        return None
-    values = [v for v in (dates.iloc[0]["max_open"], dates.iloc[0]["max_close"]) if v is not None]
-    return max(values) if values else None
+COVERAGE_FILE = Path(__file__).resolve().parents[2] / "data/seed/license_to_industry_mapping.csv"
+# 인허가 원천 추출일 = 관측 종료일(변수정의서 4.1 · 7장, 2026-10-13 노승민 확인). 덤프 20261009 기준이며
+# 원천을 다시 받으면 함께 고친다. 목록에 없는 종류는 DEFAULT_EXTRACTION_DATE
+EXTRACTION_DATES = {"일반음식점": date(2026, 10, 4)}
+DEFAULT_EXTRACTION_DATE = date(2026, 10, 5)
 
 
 def train_sales_model(frames: dict[str, Any]) -> Any:
@@ -103,7 +100,9 @@ def train_sales_model(frames: dict[str, Any]) -> Any:
 
 
 def train_survival_model(frames: dict[str, Any]) -> Any:
-    """모델 B — 생존기간 XGBoost AFT(개월 p10 · p50 · p90), 2021년 이후 개업 표본. 6.3.
+    """모델 B — 생존기간 XGBoost AFT(개월 p10 · p50 · p90). 6.3.
+
+    대상 업종은 업종 커버리지 표의 '커버됨', 관측 종료일은 인허가 종류별 원천 추출일이다.
 
     출력: batch.ml.survival.SurvivalModel(적용 업종 목록, 선택한 분포 · 폭, 테스트 지표).
     인허가 행이 없으면 NotImplementedError — 그 경우 생존 칼럼을 NULL로 두고 진행한다.
@@ -113,7 +112,8 @@ def train_survival_model(frames: dict[str, Any]) -> Any:
     licenses = frames.get("licenses")
     if licenses is None or licenses.empty:
         raise NotImplementedError("business_license가 비어 있어 모델 B를 학습할 수 없다")
-    return survival.train(licenses, _panel(frames), obs_end=_obs_end(frames))
+    covered, ends = survival.load_coverage(COVERAGE_FILE, EXTRACTION_DATES, DEFAULT_EXTRACTION_DATE)
+    return survival.train(licenses, _panel(frames), obs_end=ends, covered=covered)
 
 
 # growth_rate는 NUMERIC(6,3)이라 절댓값 1000 이상은 들어가지 않는다. 직전 구간 매출이 아주 작아 비율이 터지는
@@ -165,7 +165,7 @@ def predict_all(models: dict[str, Any], frames: dict[str, Any], model_version: s
     if models.get("survival") is not None:
         from batch.ml import survival
 
-        for r in survival.predict_next(models["survival"], panel).itertuples(index=False):
+        for r in survival.predict_next(models["survival"], panel, frames["licenses"]).itertuples(index=False):
             surv[(r.dong_code, r.industry_code)] = (r.survival_p10, r.survival_p50, r.survival_p90)
 
     rows = []
