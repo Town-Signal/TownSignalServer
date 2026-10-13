@@ -44,7 +44,7 @@ cron(가정: 매주 월요일 03:00 KST)이 배치 이미지로 실행한다. �
 
 팀원 PC에서 실행한다. 모델 A(점포당 분기 매출, XGBoost 분위수 회귀)는 `batch/ml/sales.py`에 있다.
 성장세(growth_rate · growth_confidence)는 매출 합계의 최근 4분기 ÷ 직전 4분기 − 1이고 규칙은 `common/growth.py`(점포 수 증감과 공용)에 있다.
-모델 B(생존기간, XGBoost AFT)는 `batch/ml/survival.py` — 2021년 이후 개업 인허가 점포, 인허가 업종 중 점포 100개 이상인 업종만 학습 · 예측하고 나머지 업종은 생존 칼럼을 NULL로 둔다(판정 42). 결과 파일은 같은 폴더의 `survival_aft.json`, 지표는 metrics.json의 `survival` 항목.
+모델 B(생존, XGBoost AFT)는 `batch/ml/survival.py` — 업종 커버리지 표(`data/seed/license_to_industry_mapping.csv`)의 '커버됨' 15개 업종만 학습 · 예측하고 **1 · 3년 생존 확률**(survival_prob_1y · 3y)을 적재한다. 생존 개월(survival_p10 · p50 · p90)은 비워 둔다(판정 6). 나머지 업종은 생존 칼럼이 NULL이다(판정 42). 결과 파일은 같은 폴더의 `survival_aft.json`, 지표는 metrics.json의 `survival` 항목.
 
 ```bash
 python -m batch.jobs.train_and_predict                  # 학습 · 평가 · 모델 저장만 (DB는 그대로)
@@ -55,7 +55,8 @@ python -m batch.jobs.train_and_predict --write          # prediction 표까지 �
 - 결과는 `models/<model_version>/`에 분위수별 모델(sales_q10 · q50 · q90.json)과 `metrics.json`(테스트 지표 · 분할 · 커밋 SHA)으로 남는다.
   `models/`는 저장소에 올리지 않고 팀 드라이브에 보관한다.
 - 분할은 마지막 2개 분기 = 테스트, 그 앞 2개 분기 = 검증. 2024Q1 공간 기준 경계를 넘는 시차 피처는 결측으로 둔다.
-- 생존 예측이 있는 업종은 종합점수가 매출 0.4 · 생존 0.4 · 성장세 0.2, 없는 업종은 매출 · 성장세(약 0.667 · 0.333)로 계산된다.
+- 생존 예측이 있는 업종은 종합점수가 매출 0.6 · 생존 0.3 · 성장세 0.1(판정 1, 2026. 10. 13.), 없는 업종은 매출 · 성장세(약 0.857 · 0.143)로 계산된다.
+- 실데이터로 처음부터 돌리는 순서(덤프 넣기 → 학습)는 [README](../README.md)의 '실데이터로 로컬 DB 채우기 · 모델 만들기'.
 
 학습 규격과 분할 방식은 노션 「시스템 구조」 5장과 전체 명세 6장을 따른다.
 

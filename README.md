@@ -48,6 +48,59 @@ uvicorn api.main:app --reload                                             # http
 - `load_dev_fixtures`는 `APP_ENV=local`이고 DB가 로컬일 때만 돌고, 표를 비운 뒤 더미를 넣는다.
 - 초기화: `docker compose down -v` 후 schema.sql부터 다시.
 
+## 실데이터로 로컬 DB 채우기 · 모델 만들기
+
+더미 대신 실데이터로 화면을 보거나 모델을 다시 만들 때. 원천 파일은 필요 없고, 데이터 담당이 [팀 구글 드라이브](https://drive.google.com/drive/folders/1GTuJ8_3WFgiVLr34jAYI72gp4TP0zBqY)(팀원만 접근 가능, 열리지 않으면 데이터 담당에게 권한 요청)에 올린 **전처리 덤프**(예: `townsignal_preprocessed_20261009.dump`, 9개 표 — district · dong · industry · sales_quarterly · store_quarterly · population_quarterly · business_license · commercial_market · district_rent)만 있으면 된다.
+
+### 1. 덤프 넣기
+
+덤프 파일은 **저장소 밖**(예: 저장소 옆 폴더)에 둔다. `*.dump`는 .gitignore에 없어서 저장소 안에 두면 커밋될 수 있다.
+
+```bash
+# (선택) 지금 로컬 DB의 지원사업 · 검수 기록을 따로 떠 두기 — 실제 지원사업 데이터가 아직 없을 때 더미 공고를 다시 쓰려면
+pg_dump -h localhost -U townsignal -d townsignal -Fc --data-only -t support_program -t program_verification -f ../local_support.dump
+
+# 1) 로컬 DB를 비우고 표 다시 만들기 (로컬 DB 데이터가 전부 지워진다)
+psql -h localhost -U townsignal -d townsignal -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+psql -h localhost -U townsignal -d townsignal -v ON_ERROR_STOP=1 -f db/schema.sql
+
+# 2) 덤프 넣기 — 슈퍼유저로 (아래 표 참고)
+pg_restore -h localhost -U <슈퍼유저> -d townsignal --data-only --disable-triggers --single-transaction ../townsignal_preprocessed_YYYYMMDD.dump
+pg_restore -h localhost -U <슈퍼유저> -d townsignal --data-only --disable-triggers --single-transaction ../local_support.dump   # (선택)
+
+# 3) 확인 — 기대값: 구 25 · 동 425 · 업종 100 · 인허가 약 82만
+psql -h localhost -U townsignal -d townsignal -c \
+  "SELECT (SELECT count(*) FROM district) 구, (SELECT count(*) FROM dong) 동, (SELECT count(*) FROM industry) 업종, (SELECT count(*) FROM business_license) 인허가;"
+```
+
+| 로컬 DB | 슈퍼유저 | 명령 앞에 붙일 것 |
+| --- | --- | --- |
+| Homebrew 등 직접 설치한 PostgreSQL | 설치한 PC 사용자 이름(macOS 사용자명) | 없음 |
+| docker compose의 db | `townsignal` | `docker compose exec -T db` (파일은 `< 경로`로 넘긴다) |
+
+- `--disable-triggers`는 슈퍼유저만 쓸 수 있다. `townsignal` 계정이 슈퍼유저가 아니면 `permission denied: ... is a system trigger`로 실패한다. `--single-transaction`이라 실패해도 반쯤 들어가지 않고 전부 취소된다.
+- 5432 포트를 누가 쓰는지는 `lsof -nP -iTCP:5432 -sTCP:LISTEN`으로 본다(`postgres`면 직접 설치, `com.docke`면 Docker).
+- 덤프에는 **prediction이 없다**. 이대로면 추천 3단계가 0곳이고 점수 · 예측이 비어 있다 → 2번에서 만든다.
+
+### 2. 모델 학습 · prediction 만들기
+
+```bash
+source .venv/bin/activate
+brew install libomp                       # macOS만 — xgboost에 필요
+pip install -r requirements/batch.txt     # 학습 라이브러리(약 600MB)
+
+grep DATABASE_URL .env                    # 반드시 localhost — SSH 터널 주소면 운영 DB가 바뀐다
+python -m batch.jobs.train_and_predict            # 학습 · 평가 · 모델 저장만 (DB는 그대로)
+python -m batch.jobs.train_and_predict --write    # prediction 표까지 교체
+
+psql -h localhost -U townsignal -d townsignal -c "SELECT count(*), count(survival_prob_3y) FROM prediction;"
+```
+
+- `--write`를 주면 모델 A(매출) · 모델 B(1 · 3년 생존 확률) · 성장세 · 종합점수를 계산해 `replace_predictions`로 prediction을 교체한다. 2026. 10. 13. 실데이터 기준 18,950행(생존 확률은 15개 업종 5,527행), MacBook Air에서 약 10분.
+- 모델 파일 · 지표는 `models/<model_version>/`(sales_q10 · q50 · q90.json, survival_aft.json, metrics.json)에 남는다. `models/`는 커밋하지 않고 팀 드라이브에 보관한다.
+- 끝나면 학습 라이브러리는 지워도 된다(API · 테스트는 `dev.txt`만 쓴다). 가장 깔끔한 방법은 `.venv`를 새로 만들고 `pip install -r requirements/dev.txt`, `pip cache purge`.
+- 운영 DB에 적재하는 경로(SSH 터널)와 model_version 교체 시점은 노션 「배포」 5장을 따른다. 학습 세부 규격은 [batch/README.md](batch/README.md) · 전체 명세 6장.
+
 ## 테스트
 
 ```bash
@@ -72,7 +125,7 @@ pytest -q && ruff check .
 | --- | --- | --- |
 | `ci.yml` | 모든 PR · develop push | ruff + pytest |
 | `ci-batch.yml` | batch · common · requirements 변경 | 배치 의존성까지 설치해 전체 테스트 |
-| `deploy.yml` | **수동 실행**(Actions → Deploy) | 이미지를 ECR에 올리고 EC2에서 교체 → `/health` 확인, 실패하면 직전 버전으로 자동 롤백 |
+| `deploy.yml` | develop push → **CI 성공 시 자동**(수동 실행도 가능) | 이미지를 ECR에 올리고 EC2에서 교체 → `/health` 확인, 실패하면 직전 버전으로 자동 롤백 |
 
 - 배포 브랜치는 develop 하나다(main 없음).
 - 운영 비밀값은 EC2의 `~/townsignal/.env`에만 있다(양식 `.env.prod.example`). GitHub에는 배포 접속 정보만 둔다.
