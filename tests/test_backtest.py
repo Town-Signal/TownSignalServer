@@ -131,3 +131,29 @@ def test_run_uses_only_data_up_to_cutoff(frames, monkeypatch):
 def test_run_rejects_bad_cutoff(frames, cutoff, message):
     with pytest.raises(ValueError, match=message):
         backtest.run(frames, cutoff=cutoff, params=FAST)
+
+
+def test_quarter_end():
+    assert backtest._quarter_end(sales.quarter_index("20252")) == pd.Timestamp("2025-06-30")
+    assert backtest._quarter_end(sales.quarter_index("20244")) == pd.Timestamp("2024-12-31")
+
+
+def test_licenses_at_hides_future():
+    lic = pd.DataFrame(
+        {
+            "dong_code": ["11110515"] * 3,
+            "industry_code": ["CS100001"] * 3,
+            "open_date": ["2024-01-01", "2024-02-01", "2025-08-01"],
+            "close_date": ["2024-05-01", "2025-09-01", None],
+        }
+    )
+    out = backtest.licenses_at(lic, pd.Timestamp("2025-06-30")).reset_index(drop=True)
+    assert len(out) == 2  # T 이후 개업은 빠진다
+    assert out.loc[0, "close_date"] == pd.Timestamp("2024-05-01")
+    assert pd.isna(out.loc[1, "close_date"])  # T 이후 폐업은 모른다
+
+
+def test_run_reports_sales_only_and_total(result):
+    assert "model_sales_only" in result
+    # 인허가가 없으면 생존 없이 계산하고 covered · survival_test는 없다
+    assert "covered" not in result and "survival_test" not in result
