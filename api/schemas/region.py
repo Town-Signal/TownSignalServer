@@ -19,6 +19,15 @@ from api.schemas.types import (
 StoreLevel = Literal["적음", "보통", "많음"]
 
 
+class StoreTrend(BaseModel):
+    """7.12 점포 수 증감 (판정 42) — ④ · ⑤ items · ⑫ · ⑭에 붙는다(⑱ 제외). 점포 기록이 없으면 null"""
+
+    latest_count: int
+    change_rate: float | None  # -0.071 = -7.1%, 분기 부족 · 직전 0이면 None
+    confidence: GrowthConfidence | None
+    latest_quarter: str  # year_quarter 형식 "20252"
+
+
 class RegionSearchItem(BaseModel):
     """⑦ 행정동 자동완성 (기능명세서 3.1.1)"""
 
@@ -179,6 +188,7 @@ class PredictionResponse(BaseModel):
     sales_monthly_p90: int | None
     store_count_latest: int | None
     store_level: StoreLevel | None
+    store_trend: StoreTrend | None  # 7.12
     geo_code: str | None
     # TODO(가정): 관심 카드 · 비교 칩 이름 표시용(명세 8.6에 없음, 보강 요청)
     dong_name: str
@@ -242,6 +252,7 @@ class CompareItem(BaseModel):
     sales_monthly_p50: int | None
     sales_monthly_range: tuple[int | None, int | None] | None
     geo_code: str | None
+    store_trend: StoreTrend | None  # 7.12
 
 
 class RegionCompareResponse(BaseModel):

@@ -11,7 +11,7 @@
 import pytest
 from sqlalchemy import text
 
-from tests.api_helpers import failure, single_error, success
+from tests.api_helpers import expected_store_trend, failure, single_error, success
 
 R = "/api/regions"
 SILLIM, NAKSEONGDAE, SINSA_GWANAK = "11620901", "11620902", "11620903"
@@ -107,6 +107,54 @@ def test_prediction_survival_null_for_uncovered_industry(api_client, dummy_db):
     assert data["survival_prob_1y"] is None and data["survival_prob_3y"] is None
     assert data["score_breakdown"]["survival_percentile"] is None
     assert data["score_breakdown"]["applied_weights"]["survival"] == 0.0
+
+
+def test_prediction_store_trend(api_client, dummy_db):
+    data = success(predict(api_client, SILLIM))["data"]
+    assert data["store_trend"] == expected_store_trend(dummy_db, SILLIM)
+    assert data["store_trend"]["change_rate"] is not None and data["store_trend"]["confidence"] == "낮음"
+
+
+def test_prediction_store_trend_high_with_eight_quarters(api_client, dummy_db):
+    """2024Q1 이후 8분기가 되면 4분기씩 비교하고 신뢰도 '높음'(6.4와 같은 규칙)."""
+    for quarter, count in (("20253", 30), ("20254", 34)):
+        dummy_db.execute(
+            text(
+                "INSERT INTO store_quarterly (dong_code, industry_code, year_quarter, store_count) "
+                "VALUES (:d, 'CS100001', :q, :c)"
+            ),
+            {"d": SILLIM, "q": quarter, "c": count},
+        )
+    counts = dict(
+        dummy_db.execute(
+            text(
+                "SELECT year_quarter, store_count FROM store_quarterly "
+                "WHERE dong_code = :d AND industry_code = 'CS100001'"
+            ),
+            {"d": SILLIM},
+        ).all()
+    )
+    prior = sum(counts[q] for q in ("20241", "20242", "20243", "20244"))
+    recent = sum(counts[q] for q in ("20251", "20252", "20253", "20254"))
+    trend = success(predict(api_client, SILLIM))["data"]["store_trend"]
+    assert trend == {
+        "latest_count": 34,
+        "change_rate": round(recent / prior - 1, 3),
+        "confidence": "높음",
+        "latest_quarter": "20254",
+    }
+
+
+def test_prediction_store_trend_without_prediction_row(api_client, dummy_db):
+    """예측 행이 없어도(예측 불가) 점포 기록이 있으면 증감은 낸다. 화면은 '예측 불가'로 덮는다."""
+    data = success(predict(api_client, HOEGI))["data"]
+    assert data["data_status"] == "예측 불가"
+    assert data["store_trend"] == expected_store_trend(dummy_db, HOEGI) is not None
+
+
+def test_prediction_store_trend_null_without_store_records(api_client):
+    data = success(predict(api_client, CHEONGUN))["data"]  # 점포 · 매출 · 예측 모두 없는 동
+    assert data["store_trend"] is None
 
 
 def test_prediction_sample_short(api_client):
@@ -378,6 +426,7 @@ def test_rankings_order_and_stored_rank(api_client, dummy_db):
             assert item["survival_prob_3y"] == float(p["survival_prob_3y"])
         else:
             assert item["survival_prob_1y"] is None and item["survival_prob_3y"] is None
+    assert all("store_trend" not in i for i in data["items"])  # ⑱은 생존 칸을 쓰지 않아 붙이지 않는다(8.6)
     ranks_in_order = [i["rank"] for i in data["items"] if i["rank"] is not None]
     assert ranks_in_order == list(range(1, len(ranks_in_order) + 1))  # 목록 순서 = rank, 빈틈 없음
 
@@ -484,6 +533,7 @@ def test_compare_order_and_values(api_client, dummy_db):
         assert item["survival_prob_1y"] == float(p["survival_prob_1y"])
         assert item["survival_prob_3y"] == float(p["survival_prob_3y"])
         assert item["survival_p50"] is None and item["survival_range"] == [None, None]
+        assert item["store_trend"] == expected_store_trend(dummy_db, item["dong_code"])
         assert item["budget_margin"] is None and item["passed"] is None  # rec_id 없음
         assert item["store_count"] > 0 and item["total_population"] > 0
     assert items[0]["estimated_rent_cost"] == items[1]["estimated_rent_cost"] == 16_929_000  # 같은 구 · 33㎡
@@ -531,6 +581,7 @@ def test_compare_includes_unpredicted(api_client):
         None,
     )
     assert item["survival_prob_1y"] is None and item["survival_prob_3y"] is None
+    assert item["store_trend"] is not None  # 점포 기록은 있다
     assert item["estimated_rent_cost"] is not None  # 임대료는 자치구 값으로 보인다
 
 

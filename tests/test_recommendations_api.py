@@ -16,7 +16,7 @@ from datetime import datetime
 import pytest
 from sqlalchemy import text
 
-from tests.api_helpers import failure, single_error, success
+from tests.api_helpers import expected_store_trend, failure, single_error, success
 
 URL = "/api/recommendations"
 BASE = {"age": 27, "capital": 30_000_000, "industry_code": "CS100001", "certificates": ["한식조리사"]}
@@ -142,6 +142,16 @@ def test_execute_survival_null_for_uncovered_industry(api_client):
         assert b["survival_percentile"] is None
         if r["growth_rate"] is not None:
             assert b["applied_weights"] == {"sales": 0.8571, "survival": 0.0, "growth": 0.1429}
+
+
+def test_execute_store_trend(api_client, dummy_db):
+    """7.12 · 판정 42: 후보마다 점포 수 증감을 붙인다(생존 대상 업종이어도 늘 계산)."""
+    step2 = budgets(api_client)
+    rows = recommend(api_client, step2["rec_id"], top_k=50)["data"]["recommendations"]
+    for r in rows:
+        assert r["store_trend"] == expected_store_trend(dummy_db, r["dong_code"]), r["dong_code"]
+    assert any(r["store_trend"]["change_rate"] is not None for r in rows)
+    assert {r["store_trend"]["confidence"] for r in rows} <= {"낮음", None}  # 더미는 2024Q1 이후 6분기
 
 
 def test_execute_monthly_sales_and_ranges(api_client, dummy_db):
@@ -320,6 +330,7 @@ def test_snapshot_items_match_rec_item(api_client):
         rows[0]["survival_prob_1y"], rows[0]["survival_prob_3y"],
     )
     assert first["survival_prob_3y"] is not None  # 한식음식점은 생존 대상 업종
+    assert [i["store_trend"] for i in items] == [r["store_trend"] for r in rows]
 
 
 def test_snapshot_uses_rec_item_rank_and_latest_prediction(api_client, dummy_db):
@@ -346,6 +357,7 @@ def test_snapshot_uses_rec_item_rank_and_latest_prediction(api_client, dummy_db)
     ):
         assert gone[key] is None, key
     assert gone["sales_monthly_range"] == [None, None]
+    assert gone["store_trend"] == rows[1]["store_trend"] is not None  # 점포 기록은 그대로라 증감은 남는다
 
 
 def test_snapshot_rec_not_found(api_client):

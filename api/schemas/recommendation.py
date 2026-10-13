@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from api.schemas.program import DistrictBudgetResult
-from api.schemas.region import BudgetSummary, ScoreBreakdown
+from api.schemas.region import BudgetSummary, ScoreBreakdown, StoreTrend
 from api.schemas.types import DataStatus, GrowthConfidence, Passed, RentConfidence
 
 
@@ -46,6 +46,7 @@ class DongRankResult(BaseModel):
     sales_monthly_range: tuple[int | None, int | None]  # (p10 // 3, p90 // 3)
     geo_code: str | None
     is_residential: bool  # data_status가 "표본 부족"이면 true
+    store_trend: StoreTrend | None  # 7.12 — 생존 확률이 없는 업종에서 화면이 생존 칸 대신 쓴다
 
 
 class RecommendationSummary(BaseModel):
@@ -92,6 +93,7 @@ class RecItemResult(BaseModel):
     growth_rate: float | None
     growth_confidence: GrowthConfidence | None
     data_status: DataStatus
+    store_trend: StoreTrend | None  # 7.12
 
 
 class RecommendationSnapshot(BaseModel):

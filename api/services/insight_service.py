@@ -31,6 +31,7 @@ from api.schemas.region import (
     ScoreBreakdown,
     SummaryResponse,
 )
+from api.services.store_trend_service import store_trends
 from common.budget import rent_cost
 from common.constants import DEFAULT_AREA_SQM, DEPOSIT_MULTIPLIER_DEFAULT, SERVING_MODEL_VERSION
 from common.scoring import applied_weights, data_status, store_level
@@ -264,6 +265,7 @@ def prediction(session: Session, dong_code: str, industry_code: str) -> Predicti
         score_breakdown=_score_breakdown(p) if p else None,
         store_count_latest=latest_count,
         store_level=store_level(counts.values(), latest_count),
+        store_trend=store_trends(session, industry_code, [dong_code])[dong_code],
         geo_code=dong.geo_code,
         dong_name=dong.name,
         district_code=dong.district_code,
@@ -360,6 +362,7 @@ def compare(session: Session, req: RegionCompareRequest) -> RegionCompareRespons
 
     counts = repo.industry_store_counts(session, req.industry_code, _latest_store_quarter(session))
     averages = rec_repo.recent_store_averages(session, req.industry_code, req.dong_codes)
+    trends = store_trends(session, req.industry_code, req.dong_codes)
     population_quarter = repo.latest_quarters(session, PopulationQuarterly, 1)
     populations = repo.latest_population_totals(
         session, req.dong_codes, population_quarter[-1] if population_quarter else None
@@ -399,6 +402,7 @@ def compare(session: Session, req: RegionCompareRequest) -> RegionCompareRespons
                 total_population=populations.get(code),
                 data_status=data_status(p is not None, averages.get(code)),
                 geo_code=d.geo_code,
+                store_trend=trends[code],
             )
         )
     return RegionCompareResponse(

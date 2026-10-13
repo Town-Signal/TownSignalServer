@@ -94,6 +94,25 @@ def recent_store_averages(
     return {dong: float(avg) for dong, avg in session.execute(stmt).all()}
 
 
+def store_count_series(
+    session: Session, industry_code: str, dong_codes: Iterable[str]
+) -> dict[str, dict[str, int]]:
+    """행정동별 {year_quarter: store_count} (7.12 점포 수 증감 재료). 행정동을 묶어 쿼리 1회.
+
+    점포 기록이 없는 동은 결과에 없다. 2024Q1 경계로 거르는 일은 common.store_trend가 한다.
+    """
+    dong_codes = list(dong_codes)
+    if not dong_codes:
+        return {}
+    stmt = select(StoreQuarterly.dong_code, StoreQuarterly.year_quarter, StoreQuarterly.store_count).where(
+        StoreQuarterly.industry_code == industry_code, StoreQuarterly.dong_code.in_(dong_codes)
+    )
+    series: dict[str, dict[str, int]] = {}
+    for dong, quarter, count in session.execute(stmt).all():
+        series.setdefault(dong, {})[quarter] = count
+    return series
+
+
 def get_summaries(session: Session, industry_code: str, dong_codes: Iterable[str]) -> dict[str, str]:
     """summary_cache(동 → 요약문). 요청 경로에서 LLM을 부르지 않는다(판정 9)."""
     dong_codes = list(dong_codes)

@@ -26,6 +26,7 @@ from api.schemas.recommendation import (
     ScoreBreakdown,
 )
 from api.schemas.region import BudgetSummary
+from api.services.store_trend_service import store_trends
 from common.constants import PASSED_OK, PASSED_UNKNOWN, SERVING_MODEL_VERSION
 from common.scoring import DATA_STATUS_SAMPLE_SHORT, applied_weights, data_status
 from common.units import quarterly_to_monthly
@@ -72,6 +73,7 @@ def execute(session: Session, req: RecommendationExecuteRequest) -> Recommendati
     dong_codes = [row.Prediction.dong_code for row in rows]
     store_averages = repo.recent_store_averages(session, industry_code, dong_codes)
     summaries = repo.get_summaries(session, industry_code, dong_codes)
+    trends = store_trends(session, industry_code, dong_codes)
 
     results: list[DongRankResult] = []
     for rank_no, row in enumerate(rows, start=1):
@@ -106,6 +108,7 @@ def execute(session: Session, req: RecommendationExecuteRequest) -> Recommendati
                 growth_confidence=p.growth_confidence,
                 data_status=status,
                 is_residential=status == DATA_STATUS_SAMPLE_SHORT,
+                store_trend=trends.get(p.dong_code),
                 score_breakdown=ScoreBreakdown(
                     sales_percentile=percentiles["sales"],
                     survival_percentile=percentiles["survival"],
@@ -170,6 +173,8 @@ def snapshot(session: Session, rec_id: uuid.UUID) -> RecommendationSnapshot:
     store_averages = repo.recent_store_averages(
         session, industry_code, [row.dong_code for row in rows if row.Prediction is not None]
     )
+    # 점포 수 증감은 예측 행이 없어져도 점포 기록이 있으면 낸다(7.12)
+    trends = store_trends(session, industry_code, [row.dong_code for row in rows])
     items = []
     for row in rows:
         p = row.Prediction  # 예측 행이 없어졌으면 None → 값 null · '예측 불가'
@@ -196,6 +201,7 @@ def snapshot(session: Session, rec_id: uuid.UUID) -> RecommendationSnapshot:
                 growth_rate=_float(p.growth_rate) if p else None,
                 growth_confidence=p.growth_confidence if p else None,
                 data_status=data_status(p is not None, store_averages.get(row.dong_code)),
+                store_trend=trends.get(row.dong_code),
             )
         )
 
