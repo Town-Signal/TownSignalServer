@@ -42,12 +42,16 @@ def percent_ranks(values: list[Value | None]) -> list[float | None]:
 
 
 def _redistribute(weights: Mapping[str, float], missing: set[str]) -> dict[str, float]:
-    """값이 없는 항목의 가중치를 나머지 항목에 비례 배분한다. 빠진 항목은 0.0."""
+    """값이 없는 항목의 가중치를 나머지 항목에 비례 배분한다. 빠진 항목은 0.0.
+
+    소수 4자리로 반올림한다 — 0.6 + 0.3 + 0.1이 부동소수로 1.0000000000000002가 되어 0.30000000000000004 같은
+    값이 응답(근거 분해)에 나가지 않게 한다. 점수 차이는 0.01점 이하다.
+    """
     usable = {k: w for k, w in weights.items() if k not in missing}
     total = sum(usable.values())
     if total == 0:
         return {k: 0.0 for k in weights}
-    return {k: (usable[k] / total if k in usable else 0.0) for k in weights}
+    return {k: (round(usable[k] / total, 4) if k in usable else 0.0) for k in weights}
 
 
 def applied_weights(

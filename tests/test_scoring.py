@@ -16,7 +16,7 @@ def test_total_score_with_growth_is_81_8():
 def test_total_score_without_growth_is_56_7_with_redistribution():
     result = total_score({"sales": 0.55, "survival": 0.60, "growth": None})
     assert result.total_score == 56.7
-    assert result.applied_weights == pytest.approx({"sales": 2 / 3, "survival": 1 / 3, "growth": 0.0})
+    assert result.applied_weights == {"sales": 0.6667, "survival": 0.3333, "growth": 0.0}
     assert result.contributions["growth"] is None
 
 
@@ -84,9 +84,9 @@ def test_applied_weights_only_redistributes_weights():
     assert applied_weights({"sales": 0.9, "survival": 0.1, "growth": 0.5}) == {
         "sales": 0.6, "survival": 0.3, "growth": 0.1,
     }
-    assert applied_weights({"sales": 0.55, "survival": 0.60, "growth": None}) == pytest.approx(
-        {"sales": 2 / 3, "survival": 1 / 3, "growth": 0.0}
-    )
+    assert applied_weights({"sales": 0.55, "survival": 0.60, "growth": None}) == {
+        "sales": 0.6667, "survival": 0.3333, "growth": 0.0,
+    }
     assert applied_weights({"sales": None, "survival": None, "growth": None}) == {
         "sales": 0.0, "survival": 0.0, "growth": 0.0,
     }
