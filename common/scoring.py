@@ -109,8 +109,8 @@ def total_score(
 ) -> ScoreResult:
     """total_score = round(100 × Σ w'(i) × p(i), 1). 결측 지표는 빼고 가중치를 비례 재배분한다.
 
-    예) 0.4 × 0.88 + 0.4 × 0.75 + 0.2 × 0.65 = 0.782 → 78.2
-        성장세 없음: 0.5 × 0.55 + 0.5 × 0.60 = 0.575 → 57.5
+    예) 0.6 × 0.88 + 0.3 × 0.75 + 0.1 × 0.65 = 0.818 → 81.8
+        성장세 없음: (0.6 × 0.55 + 0.3 × 0.60) ÷ 0.9 = 0.5667 → 56.7
     """
     missing = {k for k in weights if percentiles.get(k) is None}
     applied = _redistribute(weights, missing)

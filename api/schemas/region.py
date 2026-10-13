@@ -71,7 +71,7 @@ class ScoreBreakdown(BaseModel):
     sales_percentile: float | None
     survival_percentile: float | None
     growth_percentile: float | None = None
-    applied_weights: dict[str, float]  # {"sales": 0.4, "survival": 0.4, "growth": 0.2}
+    applied_weights: dict[str, float]  # {"sales": 0.6, "survival": 0.3, "growth": 0.1}
     # TODO(가정): 9장은 float 필수지만 prediction.total_score는 스키마상 NULL일 수 있어 null 허용
     total_score: float | None  # 0.0 ~ 100.0, 소수 1자리
 

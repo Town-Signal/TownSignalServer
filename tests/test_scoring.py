@@ -1,4 +1,4 @@
-"""common.scoring — PERCENT_RANK · 40/40/20 · 결측 비례 재배분 (명세 7.7)."""
+"""common.scoring — PERCENT_RANK · 60/30/10 · 결측 비례 재배분 (명세 7.7, 2026-10-13 가중치 변경)."""
 
 import pytest
 
@@ -7,22 +7,22 @@ from common.scoring import percent_rank, percent_ranks, total_score
 # ── 7.7 회귀 ─────────────────────────────────────────────────
 
 
-def test_total_score_with_growth_is_78_2():
+def test_total_score_with_growth_is_81_8():
     result = total_score({"sales": 0.88, "survival": 0.75, "growth": 0.65})
-    assert result.total_score == 78.2
-    assert result.applied_weights == {"sales": 0.4, "survival": 0.4, "growth": 0.2}
+    assert result.total_score == 81.8
+    assert result.applied_weights == {"sales": 0.6, "survival": 0.3, "growth": 0.1}
 
 
-def test_total_score_without_growth_is_57_5_with_redistribution():
+def test_total_score_without_growth_is_56_7_with_redistribution():
     result = total_score({"sales": 0.55, "survival": 0.60, "growth": None})
-    assert result.total_score == 57.5
-    assert result.applied_weights == {"sales": 0.5, "survival": 0.5, "growth": 0.0}
+    assert result.total_score == 56.7
+    assert result.applied_weights == pytest.approx({"sales": 2 / 3, "survival": 1 / 3, "growth": 0.0})
     assert result.contributions["growth"] is None
 
 
 def test_contributions_sum_to_total_score():
     result = total_score({"sales": 0.88, "survival": 0.75, "growth": 0.65})
-    assert result.contributions == {"sales": 35.2, "survival": 30.0, "growth": 13.0}
+    assert result.contributions == {"sales": 52.8, "survival": 22.5, "growth": 6.5}
     assert sum(result.contributions.values()) == pytest.approx(result.total_score, abs=0.05)
 
 
@@ -82,11 +82,11 @@ def test_applied_weights_only_redistributes_weights():
     from common.scoring import applied_weights
 
     assert applied_weights({"sales": 0.9, "survival": 0.1, "growth": 0.5}) == {
-        "sales": 0.4, "survival": 0.4, "growth": 0.2,
+        "sales": 0.6, "survival": 0.3, "growth": 0.1,
     }
-    assert applied_weights({"sales": 0.55, "survival": 0.60, "growth": None}) == {
-        "sales": 0.5, "survival": 0.5, "growth": 0.0,
-    }
+    assert applied_weights({"sales": 0.55, "survival": 0.60, "growth": None}) == pytest.approx(
+        {"sales": 2 / 3, "survival": 1 / 3, "growth": 0.0}
+    )
     assert applied_weights({"sales": None, "survival": None, "growth": None}) == {
         "sales": 0.0, "survival": 0.0, "growth": 0.0,
     }
