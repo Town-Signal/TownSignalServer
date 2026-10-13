@@ -13,8 +13,8 @@
 | **로컬 전용** 더미 데이터 적재 | `python -m batch.jobs.load_dev_fixtures` | 필요할 때 · 로컬 | 로컬 DB 15개 표 전체 ([data/dev](../data/dev/README.md)) | 백엔드 · 구현 |
 
 - **골격만**인 작업은 함수 시그니처와 docstring(입력 · 출력 · 적재 표 · 명세 절)만 있고 본문은 `NotImplementedError`다. 담당 팀원이 본문을 채운다.
-- 지원사업 작업은 K-Startup 수집 · 구조화 · 적재까지 구현돼 있고, LLM 호출(`batch/llm/client.py`)만 아직 연결 전이다.
-  지금 실행하면 공고를 수집한 뒤 LLM 단계에서 `NotImplementedError`로 끝난다. `PUBLIC_DATA_API_KEY`가 필요하다.
+- 지원사업 작업은 기업마당 수집 · 구조화 · 적재까지 구현돼 있고, LLM 호출(`batch/llm/client.py`)만 아직 연결 전이다.
+  지금 실행하면 수집을 시작하기 전에 `NotImplementedError`로 끝난다. `PUBLIC_DATA_API_KEY`가 필요하다.
 - `load_dev_fixtures`는 실제 데이터가 아닌 더미를 넣는다. 환경변수 `APP_ENV=local`이 명시돼 있고 DB가 로컬일 때만 돈다.
 - 운영 작업(run_weekly · build_support_program · train_and_predict · build_summary_cache)에는 APP_ENV 가드를 두지 않는다.
   run_weekly는 운영 EC2에서 도는 것이 정상이고(명세 12.3에서 APP_ENV는 batch에 주입하지 않음),
@@ -30,6 +30,14 @@ cron(가정: 매주 월요일 03:00 KST)이 배치 이미지로 실행한다. �
 3. support_program · program_verification 백업 — `batch.pipeline.backup`이 pg_dump 명령(비밀번호는 PGPASSWORD 환경변수)과
    지울 옛 백업(최근 4개 유지)을 조립해 로그로 남긴다. **아직 실행하지 않는다** — 배치 이미지에 postgresql-client를 넣은 뒤 연결한다.
    백업 폴더는 `BACKUP_DIR`(기본 `backups`).
+
+### 지원사업 검수 기준
+
+구조화 결과는 검수 대기(`verified_by` NULL)로 적재된다. 검수자는 원문과 대조한 뒤에만 verified로 올린다.
+
+- `amount_max`는 예비창업자가 신청 1건으로 받는 창업 지원금(보조금 · 지원금)만 인정한다. 융자 · 보증 · 이자 지원 · 상금 · 연구개발비 사업은 금액이 0이어야 한다. 0이 아니면 고치거나 verified로 올리지 않는다
+- 갚아야 하는 돈이 가용예산에 더해지지 않도록, 금액이 0보다 크면 `amount_evidence` 문구가 원문에 있고 지원금이 맞는지 확인한다. 사업 전체 예산이나 총사업비가 들어간 값(수십억 원 이상)을 특히 본다
+- 자격 조건이 `unsupported`뿐이면 평가기가 매칭하지 못한다. 원문을 보고 age · career_years · industry_code 등으로 옮길 수 있는 것은 옮긴다
 
 ### 표 교체 규칙 (명세 4.6 · 6.5)
 
