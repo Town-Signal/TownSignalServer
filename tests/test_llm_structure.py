@@ -34,7 +34,6 @@ def cond(field, op, **kw):
 def result(**kw):
     return {
         "amount_max": 0,
-        "amount_evidence": "",
         "district_name": None,
         "district_evidence": "",
         "is_exclusive": False,

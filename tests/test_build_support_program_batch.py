@@ -35,7 +35,6 @@ def answer(**kw) -> dict:
     cond = {"field": "age", "op": "<=", "number_value": 39, "evidence": "만 39세 이하"}
     return {
         "amount_max": 3_000_000,
-        "amount_evidence": "",
         "district_name": None,
         "is_exclusive": False,
         "conditions_known": True,

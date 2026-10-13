@@ -54,7 +54,6 @@ PROMPT = """너는 정부·지자체 창업 지원사업 공고에서 지원금 
  - 연구개발비는 R&D 과제·기술개발 사업·연구거점·공동연구실에서 과제별로 주는 정부출연금·연구비·과제비다. 주관기관·참여기관·연구책임자·과제 선정·컨소시엄 같은 말이 나오고
    "과제 별 ○억원", "정부지원연구개발비 ○백만원"처럼 적혀 있어도 창업 지원금이 아니므로 0이다. 공고 자체가 연구개발 과제 공모(신규과제·재공모·기술개발)이면 금액은 모두 0이다.
  - 현금성 금액이 원문에 분명하지 않으면(교육·입주·컨설팅·행사 참가 등) 0.
- - amount_evidence: 근거가 된 원문 문구(없으면 빈 문자열).
 2. district_name, district_evidence
  - 신청 대상이 서울의 특정 한 개 자치구에 거주하거나 그 구에 소재(사업장·본사)한다고, 또는 그 구에서 창업할 예정이라고 원문에 분명히 적힌 경우만 그 구 이름(아래 목록 중 하나).
  - 공고를 낸 기관·센터·학교가 어느 구에 있다는 사실은 대상 지역이 아니다. 예: "서울창업센터 동작", "○○구 청년창업지원센터", "○○대학교 창업보육센터"가 운영해도
@@ -152,7 +151,6 @@ def response_schema(district_names: list[str]) -> dict[str, Any]:
     }
     properties = {
         "amount_max": {"type": "integer"},
-        "amount_evidence": {"type": "string"},
         "district_name": {"type": ["string", "null"], "enum": [*district_names, None]},
         "district_evidence": {"type": "string"},
         "is_exclusive": {"type": "boolean"},
