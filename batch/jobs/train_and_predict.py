@@ -35,14 +35,17 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL_DIR = os.getenv("MODEL_DIR", "models")
 
 _QUERIES = {
-    "sales": "SELECT dong_code, industry_code, year_quarter, amount FROM sales_quarterly",
+    "sales": (
+        "SELECT dong_code, industry_code, year_quarter, amount, txn_count, weekend_amount, hour_11_14, "
+        "hour_17_21, hour_21_24, male_count, female_count, age_20, age_30, age_50 FROM sales_quarterly"
+    ),
     "stores": (
         "SELECT dong_code, industry_code, year_quarter, store_count, franchise_count, open_count, "
         "close_count FROM store_quarterly"
     ),
     "population": (
-        "SELECT dong_code, year_quarter, total, male, age_10, age_20, age_30, age_40, age_50, age_60 "
-        "FROM population_quarterly"
+        "SELECT dong_code, year_quarter, total, male, age_10, age_20, age_30, age_40, age_50, age_60, "
+        "time_11_14, time_17_21, time_21_24 FROM population_quarterly"
     ),
     "rent": "SELECT district_code, rent_per_sqm FROM district_rent",
     # 모델 B — 행정동 · 업종 매핑 성공 점포 전체. 2021년 이전 개업도 인허가 이력 피처와 학습 후보에 쓴다(6.3)

@@ -153,3 +153,40 @@ def test_predict_all_rows(frames, trained):
 def test_save_writes_three_models(trained, tmp_path):
     files = sales.save(trained, tmp_path)
     assert sorted(Path(p).name for p in files) == ["sales_q10.json", "sales_q50.json", "sales_q90.json"]
+
+
+def test_base_margin_falls_back_in_order():
+    df = pd.DataFrame(
+        {
+            "sales_per_store_lag1": [10.0, np.nan, np.nan, np.nan],
+            "sales_per_store_lag4": [9.0, 8.0, np.nan, np.nan],
+            "y_mean4": [7.0, 7.0, 6.0, np.nan],
+        }
+    )
+    assert sales.base_margin(df, 5.0).tolist() == [10.0, 8.0, 6.0, 5.0]
+
+
+def test_group_features_use_only_past_quarters(panel):
+    """업종 전체 · 행정동 전체 피처는 t − 1 이전 분기만 쓴다 — t 분기 매출을 바꿔도 값이 같다."""
+    dong, industry = _any_combo(panel)
+    last = panel.loc[~panel.is_future, "qidx"].max()
+    changed = panel.copy()
+    hit = (changed.dong_code == dong) & (changed.industry_code == industry) & (changed.qidx == last)
+    changed.loc[hit, "y"] = changed.loc[hit, "y"] + 5
+    changed.loc[hit, "amount"] = changed.loc[hit, "amount"] * 100
+    cols = ["ind_seas", "ind_mom", "dong_mom"]
+    before = sales._group_momentum(panel.copy())
+    after = sales._group_momentum(changed)
+    at_last = (panel.qidx == last).to_numpy()
+    pd.testing.assert_frame_equal(before.loc[at_last, cols], after.loc[at_last, cols])
+
+
+def test_model_uses_previous_quarter_as_starting_point(trained, panel):
+    """출발점(base_margin)을 1 올리면 예측(log)도 정확히 1 오른다 — 모델은 출발점에서의 차이만 낸다."""
+    future = panel[panel.is_future].head(20).copy()
+    future = future[future.sales_per_store_lag1.notna()]
+    base = sales.predict_quantiles(trained.models, future[sales.FEATURES], sales.base_margin(future, 0.0))
+    shifted = sales.predict_quantiles(
+        trained.models, future[sales.FEATURES], sales.base_margin(future, 0.0) + 1.0
+    )
+    assert np.allclose(shifted - base, 1.0)
