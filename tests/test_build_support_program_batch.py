@@ -279,7 +279,7 @@ def test_main_collects_notices_once_and_runs_both_steps(conn, monkeypatch, caplo
         return [notice(1), notice(2)]
 
     with caplog.at_level("INFO", logger=job.logger.name):
-        job.main(FakeEngine(conn), fetch, provider.submit, provider.fetch_results)
+        job.main(FakeEngine(conn), fetch, provider.submit, provider.fetch_results, ready=lambda: None)
 
     assert fetched == ["시험용-키"]  # 수집은 한 번
     assert len(provider.submitted) == 1 and len(provider.since) == 1  # ① ② 모두 실행됨
@@ -300,8 +300,11 @@ def test_main_is_not_implemented_until_provider_is_connected(conn, monkeypatch):
     """운영 제공사를 연결하기 전에는 run_weekly가 '미구현'으로 기록한다."""
     monkeypatch.setenv("PUBLIC_DATA_API_KEY", "시험용-키")
 
+    def fetch(key, known):
+        pytest.fail("제공사가 준비되지 않았는데 수집을 시작했다")
+
     with pytest.raises(NotImplementedError):
-        job.main(FakeEngine(conn), lambda key, known: [notice(1)])
+        job.main(FakeEngine(conn), fetch)
 
 
 def test_main_passes_stored_urls_to_fetch(conn, monkeypatch):
@@ -319,7 +322,7 @@ def test_main_passes_stored_urls_to_fetch(conn, monkeypatch):
         return []
 
     provider = Provider()
-    job.main(FakeEngine(conn), fetch, provider.submit, provider.fetch_results)
+    job.main(FakeEngine(conn), fetch, provider.submit, provider.fetch_results, ready=lambda: None)
 
     assert "https://example.test/known" in seen[0] and None not in seen[0]
 

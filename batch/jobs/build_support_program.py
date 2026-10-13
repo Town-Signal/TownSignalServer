@@ -352,14 +352,17 @@ def main(
     fetch: Callable[[str, Container[str]], list[RawNotice]] = fetch_bizinfo_notices,
     submit: Callable[[list[BatchRequest], dict[str, Any]], str] = llm_client.submit_batch,
     fetch_results: Callable[[datetime], list[BatchResult]] = llm_client.fetch_batch_results,
+    ready: Callable[[], None] = llm_client.ensure_ready,
 ) -> None:
     """run_weekly ① · ②: 공고를 한 번 수집해 지난주 Batch 결과를 적재하고 새 공고를 Batch로 제출한다.
 
     인자는 모두 테스트에서 바꿔 끼우는 용도라 run_weekly처럼 인자 없이 불러도 된다. DB 작업은 한 트랜잭션이다.
+    제공사가 준비되지 않았으면 수집(첨부 내려받기로 오래 걸림)을 시작하기 전에 멈춘다.
     """
     api_key = os.getenv("PUBLIC_DATA_API_KEY", "")
     if not api_key:
         raise RuntimeError("PUBLIC_DATA_API_KEY가 비어 있다")
+    ready()
     engine = engine or create_engine(config.DATABASE_URL)
     with engine.begin() as conn:  # 수집이 오래 걸리니 읽기만 하고 먼저 닫는다
         known = _known_urls(conn)
