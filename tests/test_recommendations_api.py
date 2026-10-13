@@ -108,7 +108,7 @@ def test_execute_growth_null_uses_stored_score(api_client, dummy_db):
     stored = prediction_rows(dummy_db)[MANGWON1]
     breakdown = mangwon["score_breakdown"]
     assert mangwon["growth_rate"] is None and breakdown["growth_percentile"] is None
-    assert breakdown["applied_weights"] == {"sales": 0.5, "survival": 0.5, "growth": 0.0}
+    assert breakdown["applied_weights"] == {"sales": 0.6667, "survival": 0.3333, "growth": 0.0}
     assert breakdown["total_score"] == float(stored["total_score"])
 
 

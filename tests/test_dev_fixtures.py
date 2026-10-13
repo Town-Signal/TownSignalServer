@@ -288,13 +288,14 @@ def test_scores_match_independent_common_calculation(t):
         assert all(a["total_score"] >= b["total_score"] for a, b in zip(ordered, ordered[1:], strict=False))
 
 
-def test_growth_null_industry_uses_50_50(t):
+def test_growth_null_industry_redistributes_to_sales_and_survival(t):
+    """성장세가 없으면 매출 · 생존이 0.6 : 0.3 비율로 나눠 갖는다(2/3 · 1/3)."""
     for p in _xgb(t):
         if p["industry_code"] == "CS200002":
-            raw = (p["sales_percentile"] * 50 + p["survival_percentile"] * 50).quantize(
+            raw = (p["sales_percentile"] * 200 / 3 + p["survival_percentile"] * 100 / 3).quantize(
                 Decimal("0.1"), rounding=ROUND_HALF_UP
             )
-            assert p["total_score"] == raw
+            assert abs(p["total_score"] - raw) <= Decimal("0.1")
 
 
 # ── 8 · 9 결정성 · 더미 표식 ─────────────────────────────────

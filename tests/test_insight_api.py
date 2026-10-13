@@ -102,7 +102,7 @@ def test_prediction_sample_short(api_client):
 def test_prediction_growth_null(api_client, dummy_db):
     data = success(predict(api_client, MANGWON1))["data"]
     assert data["growth_rate"] is None and data["growth_confidence"] is None
-    assert data["score_breakdown"]["applied_weights"] == {"sales": 0.5, "survival": 0.5, "growth": 0.0}
+    assert data["score_breakdown"]["applied_weights"] == {"sales": 0.6667, "survival": 0.3333, "growth": 0.0}
     assert data["total_score"] == float(stored(dummy_db, MANGWON1)["total_score"])
 
 
