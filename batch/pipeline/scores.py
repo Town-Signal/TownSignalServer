@@ -11,12 +11,22 @@ from typing import Any
 
 from common.scoring import percent_ranks, total_score
 
-# 지표 → (prediction 원값 칼럼, 백분위 칼럼)
+# 지표 → (prediction 원값 칼럼, 백분위 칼럼). 클수록 좋은 값이어야 한다
 FACTOR_COLUMNS = {
     "sales": ("sales_p50", "sales_percentile"),
-    "survival": ("survival_p50", "survival_percentile"),
+    "survival": ("survival_prob_3y", "survival_percentile"),
     "growth": ("growth_rate", "growth_percentile"),
 }
+# 3년 생존 확률이 없는 행(개발용 더미 등)은 생존기간 p50으로 대신한다. 같은 모델이면 둘의 순서는 같다
+_FALLBACK = {"survival_prob_3y": "survival_p50"}
+
+
+def _raw(row: dict[str, Any], column: str) -> Any:
+    value = row.get(column)
+    if value is None and column in _FALLBACK:
+        value = row.get(_FALLBACK[column])
+    return value
+
 
 _PERCENTILE_PLACES = Decimal("0.0001")  # NUMERIC(5,4)
 _SCORE_PLACES = Decimal("0.1")  # NUMERIC(5,1)
@@ -47,7 +57,7 @@ def fill_scores(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     for group in groups.values():
         for raw_col, pct_col in FACTOR_COLUMNS.values():
-            for row, pct in zip(group, percent_ranks([r[raw_col] for r in group]), strict=True):
+            for row, pct in zip(group, percent_ranks([_raw(r, raw_col) for r in group]), strict=True):
                 row[pct_col] = _to_percentile(pct)
 
         for row in group:

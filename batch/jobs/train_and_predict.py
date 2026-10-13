@@ -1,4 +1,4 @@
-"""모델 학습 · 전 조합 예측 · prediction 적재 — 담당: AI. 모델 A(매출) · 성장세 구현, 모델 B는 골격.
+"""모델 학습 · 전 조합 예측 · prediction 적재 — 담당: AI. 모델 A(매출) · 모델 B(생존) · 성장세 구현.
 
 실행: python -m batch.jobs.train_and_predict [--write] [--model-version xgb_v1] [--model-dir models]
       팀원 PC에서, SSH 터널로 운영 DB에 적재 — 판정 38
@@ -20,6 +20,7 @@ import logging
 import os
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +45,11 @@ _QUERIES = {
         "FROM population_quarterly"
     ),
     "rent": "SELECT district_code, rent_per_sqm FROM district_rent",
+    # 모델 B — 행정동 · 업종 매핑 성공 점포 전체. 2021년 이전 개업도 인허가 이력 피처와 학습 후보에 쓴다(6.3)
+    "licenses": (
+        "SELECT dong_code, industry_code, open_date, close_date FROM business_license "
+        "WHERE dong_code IS NOT NULL AND industry_code IS NOT NULL"
+    ),
 }
 
 
@@ -65,6 +71,24 @@ def load_training_frames(conn: Connection) -> dict[str, Any]:
     return frames
 
 
+def _panel(frames: dict[str, Any]) -> Any:
+    """모델 A · B가 같이 쓰는 행정동 × 업종 × 분기 패널. 한 번만 만들어 frames에 둔다."""
+    from batch.ml import sales
+
+    if "panel" not in frames:
+        frames["panel"] = sales.build_panel(
+            frames["sales"], frames["stores"], frames["population"], frames["rent"]
+        )
+    return frames["panel"]
+
+
+COVERAGE_FILE = Path(__file__).resolve().parents[2] / "data/seed/license_to_industry_mapping.csv"
+# 인허가 원천 추출일 = 관측 종료일(변수정의서 4.1 · 7장, 2026-10-13 노승민 확인). 덤프 20261009 기준이며
+# 원천을 다시 받으면 함께 고친다. 목록에 없는 종류는 DEFAULT_EXTRACTION_DATE
+EXTRACTION_DATES = {"일반음식점": date(2026, 10, 4)}
+DEFAULT_EXTRACTION_DATE = date(2026, 10, 5)
+
+
 def train_sales_model(frames: dict[str, Any]) -> Any:
     """모델 A — 점포당 분기 매출 XGBoost 분위수 회귀(p10 · p50 · p90), 시간 분할(판정 37). 6.2.
 
@@ -72,13 +96,24 @@ def train_sales_model(frames: dict[str, Any]) -> Any:
     """
     from batch.ml import sales
 
-    panel = sales.build_panel(frames["sales"], frames["stores"], frames["population"], frames["rent"])
-    return sales.train(panel)
+    return sales.train(_panel(frames))
 
 
 def train_survival_model(frames: dict[str, Any]) -> Any:
-    """모델 B — 생존기간 XGBoost AFT(개월 p10 · p50 · p90), 2021년 이후 개업 표본. 6.3."""
-    raise NotImplementedError("모델 B 학습은 AI 담당이 구현한다(6.3)")
+    """모델 B — 생존기간 XGBoost AFT(개월 p10 · p50 · p90). 6.3.
+
+    대상 업종은 업종 커버리지 표의 '커버됨', 관측 종료일은 인허가 종류별 원천 추출일이다.
+
+    출력: batch.ml.survival.SurvivalModel(적용 업종 목록, 선택한 분포 · 폭, 테스트 지표).
+    인허가 행이 없으면 NotImplementedError — 그 경우 생존 칼럼을 NULL로 두고 진행한다.
+    """
+    from batch.ml import survival
+
+    licenses = frames.get("licenses")
+    if licenses is None or licenses.empty:
+        raise NotImplementedError("business_license가 비어 있어 모델 B를 학습할 수 없다")
+    covered, ends = survival.load_coverage(COVERAGE_FILE, EXTRACTION_DATES, DEFAULT_EXTRACTION_DATE)
+    return survival.train(licenses, _panel(frames), obs_end=ends, covered=covered)
 
 
 # growth_rate는 NUMERIC(6,3)이라 절댓값 1000 이상은 들어가지 않는다. 직전 구간 매출이 아주 작아 비율이 터지는
@@ -117,29 +152,38 @@ def predict_all(models: dict[str, Any], frames: dict[str, Any], model_version: s
     입력: models = {"sales": SalesModel, "survival": 없으면 생략}, frames = load_training_frames 결과
           (+ 선택 "growth": compute_growth 결과)
     행 칼럼: dong_code · industry_code · model_version · sales_p10/p50/p90(원, 분기) ·
-    survival_p10/p50/p90(개월, 소수 1자리) · growth_rate · growth_confidence.
+    survival_p10/p50/p90(개월, 외삽이라 비워 둔다) · survival_prob_1y/3y(모델 B 생존 확률) ·
+    growth_rate · growth_confidence.
     매출 기록이 전혀 없는 조합은 행을 만들지 않는다. 분위수는 p10 ≤ p50 ≤ p90이 되게 정렬한다(CHECK).
     모델 B · 성장세가 없으면 그 칼럼은 NULL이다. 점수 칼럼은 채우지 않는다 — replace_predictions가 채운다.
     """
     from batch.ml import sales
 
-    if models.get("survival") is not None:
-        raise NotImplementedError("모델 B 예측 결합은 모델 B와 함께 구현한다(6.3)")
-    panel = sales.build_panel(frames["sales"], frames["stores"], frames["population"], frames["rent"])
+    panel = _panel(frames)
     predicted = sales.predict_next(models["sales"], panel)
     growth = frames.get("growth") or {}
+    surv: dict[tuple[str, str], tuple[float, float]] = {}
+    if models.get("survival") is not None:
+        from batch.ml import survival
+
+        for r in survival.predict_next(models["survival"], panel, frames["licenses"]).itertuples(index=False):
+            surv[(r.dong_code, r.industry_code)] = (r.survival_prob_12m, r.survival_prob_36m)
 
     rows = []
     for r in predicted.itertuples(index=False):
         rate, confidence = growth.get((r.dong_code, r.industry_code), (None, None))
+        p1, p3 = surv.get((r.dong_code, r.industry_code), (None, None))
         rows.append(
             {
                 "dong_code": r.dong_code,
                 "industry_code": r.industry_code,
                 "model_version": model_version,
+                # 개월은 관측 기간을 넘는 외삽이라 적재하지 않는다(schema.sql 주석)
                 "survival_p10": None,
                 "survival_p50": None,
                 "survival_p90": None,
+                "survival_prob_1y": None if p1 is None else float(p1),
+                "survival_prob_3y": None if p3 is None else float(p3),
                 "sales_p10": int(r.sales_p10),
                 "sales_p50": int(r.sales_p50),
                 "sales_p90": int(r.sales_p90),
@@ -176,6 +220,23 @@ def _save_artifacts(model: Any, model_version: str, model_dir: str) -> Path:
     return out
 
 
+def _save_survival(model: Any, model_version: str, model_dir: str) -> None:
+    """모델 B 파일을 같은 model_version 폴더에 두고, metrics.json에 survival 항목을 더한다."""
+    from batch.ml import survival
+
+    out = Path(model_dir) / model_version
+    survival.save(model, out)
+    metrics_file = out / "metrics.json"
+    report = json.loads(metrics_file.read_text(encoding="utf-8")) if metrics_file.exists() else {}
+    report["survival"] = {
+        "file": "survival_aft.json",
+        "distribution": model.distribution,
+        "scale": model.scale,
+        **model.metrics,
+    }
+    metrics_file.write_text(json.dumps(report, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+
+
 def run(conn: Connection, model_version: str, model_dir: str, write: bool) -> dict[str, Any]:
     """load_training_frames → 모델 A 학습 · 평가 · 저장 → predict_all → (write면) replace_predictions."""
     frames = load_training_frames(conn)
@@ -200,6 +261,8 @@ def run(conn: Connection, model_version: str, model_dir: str, write: bool) -> di
             continue
         if name == "모델 B":
             models["survival"] = value
+            _save_survival(value, model_version, model_dir)
+            logger.info("모델 B 테스트: %s", json.dumps(value.metrics["test"], ensure_ascii=False))
         else:
             frames["growth"] = value
 

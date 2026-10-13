@@ -186,6 +186,8 @@ CREATE TABLE prediction (
   industry_code     CHAR(8)     NOT NULL REFERENCES industry (industry_code),
   model_version     VARCHAR(30) NOT NULL,            -- xgb_v1 / mlp_v1
   survival_p10 NUMERIC(6,1), survival_p50 NUMERIC(6,1), survival_p90 NUMERIC(6,1),
+  survival_prob_1y  NUMERIC(4,3),                    -- 모델 B: 1년 · 3년 뒤에도 영업 중일 확률(0 ~ 1)
+  survival_prob_3y  NUMERIC(4,3),
   sales_p10    BIGINT,       sales_p50    BIGINT,    sales_p90    BIGINT,
   growth_rate       NUMERIC(6,3),
   growth_confidence VARCHAR(10) CHECK (growth_confidence IN ('높음','낮음')),
@@ -199,7 +201,10 @@ CREATE TABLE prediction (
   CONSTRAINT chk_pred_survival CHECK (survival_p10 <= survival_p50
                                   AND survival_p50 <= survival_p90),
   CONSTRAINT chk_pred_sales    CHECK (sales_p10 <= sales_p50
-                                  AND sales_p50 <= sales_p90)
+                                  AND sales_p50 <= sales_p90),
+  CONSTRAINT chk_pred_survival_prob CHECK (survival_prob_3y >= 0
+                                  AND survival_prob_3y <= survival_prob_1y
+                                  AND survival_prob_1y <= 1)
 );
 CREATE INDEX idx_pred_rank ON prediction (industry_code, model_version, sales_p50 DESC);
 
@@ -207,6 +212,9 @@ CREATE INDEX idx_pred_rank ON prediction (industry_code, model_version, sales_p5
 -- 원천이 분기 갱신이라 기준 분기가 바뀐 주에만 갈아끼움.
 -- p10/p50/p90 = 80% 예측구간. 최솟값·최댓값이라 부르면 표본 min/max로 읽혀
 -- 계획서 성능목표 예측 구간의 실측 포함률을 측정할 수 없게 됨.
+-- survival_prob_1y · 3y: 생존기간 개월(p10 · p50 · p90)은 관측 기간(약 5년)을 넘는 외삽이 대부분이라
+-- 모델 B는 실제와 검증되는 1 · 3년 생존 확률로 적재하고 개월 칼럼은 비워 둔다(분석계획서 실험 B3).
+-- 생존 백분위(survival_percentile)는 survival_prob_3y로 계산한다.
 -- model_version이 PK에 있어 XGBoost와 MLP를 나란히 저장·비교할 수 있음.
 
 -- 배치 재적재 (MySQL의 ON DUPLICATE KEY UPDATE에 해당)
