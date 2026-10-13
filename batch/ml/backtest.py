@@ -14,9 +14,13 @@
 비교는 업종 안에서 한다(순위가 업종 안의 순위이므로). 표본 부족 조합(T까지의 최근 4분기 평균 점포
 5개 미만)은 실제 성과가 점포 몇 개에 좌우되므로 평가에서 뺀다. 순위에는 그대로 포함된다(판정 20).
 
+종합점수 — 운영처럼 매출 · 생존(3년 생존 확률) · 성장세로 total_score를 만든다(실험 R3).
+- 성장세: T까지의 매출로 compute_growth
+- 생존: frames에 licenses가 있으면 T 분기 말까지 개업한 점포만, T 이후 폐업은 모르는 것으로(영업 중) 두고
+  관측 종료일 = T 분기 말로 모델 B를 다시 학습한다. 없으면 생존 없이 계산한다
+- 비교용으로 매출 순위만(sales_p50)의 결과도 함께 낸다(R1 · R2와 같은 기준)
+
 한계 — rent_per_sqm은 과거 분기 값이 없어 현재 기준 분기 값을 그대로 쓴다(변수정의서 3.2).
-모델 B · 성장세가 구현되면 예측 행에 함께 채워야 total_score가 운영과 같아진다.
-지금은 매출 하나라 total_score 순위 = sales_p50 순위다.
 """
 
 import math
@@ -179,38 +183,102 @@ def run(
     model = sales.train(panel, params)
     predicted = sales.predict_next(model, panel)
 
-    rows = [
-        {
-            "dong_code": r.dong_code,
-            "industry_code": r.industry_code,
-            "model_version": MODEL_VERSION,
-            "sales_p50": int(r.sales_p50),
-            "survival_p50": None,
-            "growth_rate": None,
-        }
-        for r in predicted.itertuples(index=False)
-    ]
+    from batch.jobs.train_and_predict import compute_growth
+
+    growth = compute_growth(past["sales"])
+    survival_model, surv = _survival_at(frames.get("licenses"), panel, t)
+
+    rows = []
+    for r in predicted.itertuples(index=False):
+        key = (r.dong_code, r.industry_code)
+        rows.append(
+            {
+                "dong_code": r.dong_code,
+                "industry_code": r.industry_code,
+                "model_version": MODEL_VERSION,
+                "sales_p50": int(r.sales_p50),
+                "survival_p50": None,
+                "survival_prob_3y": surv.get(key),
+                "growth_rate": growth.get(key, (None, None))[0],
+            }
+        )
     scored = pd.DataFrame(fill_scores(rows))
     scored["total_score"] = pd.to_numeric(scored["total_score"], errors="coerce").astype(float)
 
     actual = outcomes(full, cutoff, horizon)
-    df = scored[[*sales.KEYS, "total_score"]].merge(actual, on=sales.KEYS, how="inner")
+    df = scored[[*sales.KEYS, "total_score", "sales_p50", "survival_prob_3y"]].merge(
+        actual, on=sales.KEYS, how="inner"
+    )
+    df["sales_p50"] = df["sales_p50"].astype(float)
     evaluated = df[df["eligible"]]
+    covered = evaluated[evaluated["survival_prob_3y"].notna()]
 
-    def both(score: str) -> dict[str, Any]:
+    def both(data: pd.DataFrame, score: str) -> dict[str, Any]:
         return {
-            "sales": compare(evaluated, score, "actual_sales", min_group=min_group),
+            "sales": compare(data, score, "actual_sales", min_group=min_group),
             "close_rate": compare(
-                evaluated, score, "actual_close_rate", higher_is_better=False, min_group=min_group
+                data, score, "actual_close_rate", higher_is_better=False, min_group=min_group
             ),
         }
 
-    return {
+    result = {
         "cutoff": cutoff,
         "horizon": horizon,
         "outcome_quarters": [sales.quarter_label(q) for q in range(t + 1, t + horizon + 1)],
-        "rows": {"predicted": len(scored), "with_outcome": len(df), "evaluated": len(evaluated)},
+        "rows": {
+            "predicted": len(scored),
+            "with_outcome": len(df),
+            "evaluated": len(evaluated),
+            "with_survival": len(covered),
+        },
         "model_test_calibrated": model.metrics["test_calibrated"],
-        "model": both("total_score"),
-        "naive": both("naive"),
+        # 운영과 같은 종합점수(매출 · 생존 · 성장세)
+        "model": both(evaluated, "total_score"),
+        # R1 · R2와 같은 매출 순위만
+        "model_sales_only": both(evaluated, "sales_p50"),
+        "naive": both(evaluated, "naive"),
     }
+    if len(covered):
+        # 생존 확률이 있는 업종만 — 생존이 순위에 실제로 들어간 곳에서의 비교
+        result["covered"] = {
+            "model": both(covered, "total_score"),
+            "model_sales_only": both(covered, "sales_p50"),
+            "survival_only": both(covered, "survival_prob_3y"),
+            "naive": both(covered, "naive"),
+        }
+    if survival_model is not None:
+        result["survival_test"] = {
+            k: survival_model.metrics["test"][k] for k in ("c_index", "c_index_within_industry", "rows")
+        }
+    return result
+
+
+def _survival_at(licenses: pd.DataFrame | None, panel: pd.DataFrame, t: int) -> tuple[Any, dict]:
+    """T 분기 말 시점의 모델 B와 조합별 3년 생존 확률. 인허가가 없으면 (None, {})."""
+    if licenses is None or licenses.empty:
+        return None, {}
+    from batch.jobs.train_and_predict import COVERAGE_FILE, DEFAULT_EXTRACTION_DATE, EXTRACTION_DATES
+    from batch.ml import survival
+
+    end = _quarter_end(t)
+    past = licenses_at(licenses, end)
+    covered, _ = survival.load_coverage(COVERAGE_FILE, EXTRACTION_DATES, DEFAULT_EXTRACTION_DATE)
+    model = survival.train(past, panel, obs_end=end.date(), covered=covered, baselines=False)
+    pred = survival.predict_next(model, panel, past)
+    return model, {
+        (r.dong_code, r.industry_code): float(r.survival_prob_36m) for r in pred.itertuples(index=False)
+    }
+
+
+def licenses_at(licenses: pd.DataFrame, end: pd.Timestamp) -> pd.DataFrame:
+    """end 시점에 알 수 있는 인허가: end까지 개업한 점포만, end 이후 폐업은 영업 중(폐업일 없음)으로."""
+    past = licenses[pd.to_datetime(licenses["open_date"]) <= end].copy()
+    past["close_date"] = pd.to_datetime(past["close_date"])
+    past.loc[past["close_date"] > end, "close_date"] = pd.NaT
+    return past
+
+
+def _quarter_end(t: int) -> pd.Timestamp:
+    """분기 번호 → 그 분기 마지막 날."""
+    year, q = divmod(t, 4)
+    return pd.Timestamp(year=year, month=3 * (q + 1), day=1) + pd.offsets.MonthEnd(0)
