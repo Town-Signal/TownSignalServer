@@ -152,7 +152,8 @@ def predict_all(models: dict[str, Any], frames: dict[str, Any], model_version: s
     입력: models = {"sales": SalesModel, "survival": 없으면 생략}, frames = load_training_frames 결과
           (+ 선택 "growth": compute_growth 결과)
     행 칼럼: dong_code · industry_code · model_version · sales_p10/p50/p90(원, 분기) ·
-    survival_p10/p50/p90(개월, 소수 1자리) · growth_rate · growth_confidence.
+    survival_p10/p50/p90(개월, 외삽이라 비워 둔다) · survival_prob_1y/3y(모델 B 생존 확률) ·
+    growth_rate · growth_confidence.
     매출 기록이 전혀 없는 조합은 행을 만들지 않는다. 분위수는 p10 ≤ p50 ≤ p90이 되게 정렬한다(CHECK).
     모델 B · 성장세가 없으면 그 칼럼은 NULL이다. 점수 칼럼은 채우지 않는다 — replace_predictions가 채운다.
     """
@@ -161,25 +162,28 @@ def predict_all(models: dict[str, Any], frames: dict[str, Any], model_version: s
     panel = _panel(frames)
     predicted = sales.predict_next(models["sales"], panel)
     growth = frames.get("growth") or {}
-    surv: dict[tuple[str, str], tuple[float, float, float]] = {}
+    surv: dict[tuple[str, str], tuple[float, float]] = {}
     if models.get("survival") is not None:
         from batch.ml import survival
 
         for r in survival.predict_next(models["survival"], panel, frames["licenses"]).itertuples(index=False):
-            surv[(r.dong_code, r.industry_code)] = (r.survival_p10, r.survival_p50, r.survival_p90)
+            surv[(r.dong_code, r.industry_code)] = (r.survival_prob_12m, r.survival_prob_36m)
 
     rows = []
     for r in predicted.itertuples(index=False):
         rate, confidence = growth.get((r.dong_code, r.industry_code), (None, None))
-        s10, s50, s90 = surv.get((r.dong_code, r.industry_code), (None, None, None))
+        p1, p3 = surv.get((r.dong_code, r.industry_code), (None, None))
         rows.append(
             {
                 "dong_code": r.dong_code,
                 "industry_code": r.industry_code,
                 "model_version": model_version,
-                "survival_p10": None if s10 is None else float(s10),
-                "survival_p50": None if s50 is None else float(s50),
-                "survival_p90": None if s90 is None else float(s90),
+                # 개월은 관측 기간을 넘는 외삽이라 적재하지 않는다(schema.sql 주석)
+                "survival_p10": None,
+                "survival_p50": None,
+                "survival_p90": None,
+                "survival_prob_1y": None if p1 is None else float(p1),
+                "survival_prob_3y": None if p3 is None else float(p3),
                 "sales_p10": int(r.sales_p10),
                 "sales_p50": int(r.sales_p50),
                 "sales_p90": int(r.sales_p90),

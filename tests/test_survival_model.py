@@ -200,9 +200,11 @@ def test_predict_all_fills_survival_for_covered_only(frames, model, licenses):
     rows = predict_all({"sales": sales_model, "survival": model}, {**frames, "licenses": licenses}, "xgb_v1")
     covered = [r for r in rows if r["industry_code"] in COVERED]
     others = [r for r in rows if r["industry_code"] not in COVERED]
-    assert covered and all(r["survival_p50"] is not None for r in covered)
-    assert others and all(r["survival_p50"] is None for r in others)
-    assert all(r["survival_p10"] <= r["survival_p50"] <= r["survival_p90"] for r in covered)
+    assert covered and all(r["survival_prob_3y"] is not None for r in covered)
+    assert others and all(r["survival_prob_3y"] is None for r in others)
+    assert all(0 <= r["survival_prob_3y"] <= r["survival_prob_1y"] <= 1 for r in covered)
+    # 개월은 외삽이라 적재하지 않는다
+    assert all(r["survival_p50"] is None for r in rows)
 
 
 def _lic(dong, industry, opened, closed=None):

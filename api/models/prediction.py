@@ -28,8 +28,10 @@ class Prediction(Base):
         ),
         CheckConstraint("sales_p10 <= sales_p50 AND sales_p50 <= sales_p90", name="chk_pred_sales"),
         CheckConstraint(
-            "growth_confidence IN ('높음','낮음')", name="prediction_growth_confidence_check"
+            "survival_prob_3y >= 0 AND survival_prob_3y <= survival_prob_1y AND survival_prob_1y <= 1",
+            name="chk_pred_survival_prob",
         ),
+        CheckConstraint("growth_confidence IN ('높음','낮음')", name="prediction_growth_confidence_check"),
     )
 
     dong_code: Mapped[str] = mapped_column(CHAR(8), ForeignKey("dong.dong_code"), primary_key=True)
@@ -41,6 +43,9 @@ class Prediction(Base):
     survival_p10: Mapped[Decimal | None] = mapped_column(Numeric(6, 1))
     survival_p50: Mapped[Decimal | None] = mapped_column(Numeric(6, 1))
     survival_p90: Mapped[Decimal | None] = mapped_column(Numeric(6, 1))
+    # 모델 B는 개월 대신 1 · 3년 생존 확률(0 ~ 1)로 적재한다(schema.sql 주석)
+    survival_prob_1y: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
+    survival_prob_3y: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
     sales_p10: Mapped[int | None] = mapped_column(BigInteger)  # 원, 분기
     sales_p50: Mapped[int | None] = mapped_column(BigInteger)
     sales_p90: Mapped[int | None] = mapped_column(BigInteger)
