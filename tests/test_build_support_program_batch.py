@@ -35,7 +35,6 @@ def answer(**kw) -> dict:
     cond = {"field": "age", "op": "<=", "number_value": 39, "evidence": "만 39세 이하"}
     return {
         "amount_max": 3_000_000,
-        "amount_evidence": "",
         "district_name": None,
         "is_exclusive": False,
         "conditions_known": True,
@@ -152,13 +151,15 @@ def test_collect_skips_result_for_notice_that_is_no_longer_collected(conn):
     assert row(conn, 1) is None
 
 
-def test_collect_skips_result_when_raw_text_changed_after_submission(conn):
+def test_collect_pairs_by_url_even_if_raw_text_changed_after_submission(conn):
+    """꼬리표는 주소만 본다. 제출 뒤 원문이 달라져도(수정은 따라가지 않는다) 같은 주소면 짝이 맞는다."""
     old = notice(1, raw_text="제출 당시 원문")
     now = notice(1, raw_text="바뀐 원문")
 
-    assert collect(conn, [now], [BatchResult(custom_id(old), answer())]) == 0
+    assert custom_id(old) == custom_id(now)
+    assert collect(conn, [now], [BatchResult(custom_id(old), answer())]) == 1
 
-    assert row(conn) is None
+    assert row(conn)["raw_text"] == "바뀐 원문"  # 이번 주 수집한 원문이 저장된다
 
 
 @pytest.mark.parametrize("data", [None, [], "글자"])
@@ -170,7 +171,8 @@ def test_collect_skips_failed_or_malformed_result(conn, data):
     assert row(conn) is None
 
 
-def test_collect_does_not_overwrite_row_that_already_has_same_raw_text(conn):
+def test_collect_does_not_overwrite_a_row_whose_notice_was_skipped_at_collection(conn):
+    """DB에 있는 주소의 공고는 수집 단계에서 빠진다(notices에 없다). 같은 결과가 다시 와도 버린다."""
     one = notice(1)
     collect(conn, [one], [BatchResult(custom_id(one), answer())])
     conn.execute(
@@ -178,13 +180,14 @@ def test_collect_does_not_overwrite_row_that_already_has_same_raw_text(conn):
         {"u": one.source_url},
     )
 
-    saved = collect(conn, [one], [BatchResult(custom_id(one), answer(amount_max=1))])  # 같은 결과가 다시 옴
+    saved = collect(conn, [], [BatchResult(custom_id(one), answer(amount_max=1))])  # 같은 결과가 다시 옴
 
     r = row(conn)
     assert saved == 0 and (r["amount_max"], r["verified_by"]) == (777, "검수자")
 
 
-def test_collect_updates_row_whose_raw_text_changed_and_clears_verification(conn):
+def test_collect_leaves_an_existing_row_alone_even_if_the_text_differs(conn):
+    """같은 주소의 행이 이미 있으면 원문이 달라도 값 · 검수를 바꾸지 않는다(갱신하지 않는다)."""
     old = notice(1, raw_text="옛 원문")
     collect(conn, [old], [BatchResult(custom_id(old), answer())])
     conn.execute(
@@ -195,7 +198,11 @@ def test_collect_updates_row_whose_raw_text_changed_and_clears_verification(conn
     saved = collect(conn, [new], [BatchResult(custom_id(new), answer(amount_max=9))])
 
     r = row(conn)
-    assert saved == 1 and (r["raw_text"], r["amount_max"], r["verified_by"]) == ("새 원문", 9, None)
+    assert saved == 0 and (r["raw_text"], r["amount_max"], r["verified_by"]) == (
+        "옛 원문",
+        3_000_000,
+        "검수자",
+    )
 
 
 def test_collect_with_no_results_saves_nothing(conn):
@@ -216,22 +223,19 @@ def test_first_week_submits_everything_and_saves_nothing(conn):
     assert provider.since == [NOW - timedelta(days=job.COLLECT_DAYS)]
 
 
-def test_second_week_saves_fresh_results_and_submits_new_and_changed_notices(conn):
+def test_second_week_saves_fresh_results_and_submits_only_new_notices(conn):
     provider = Provider()
     job.run(conn, [notice(1), notice(2), notice(3)], NOW, provider.submit, provider.fetch_results)  # 1주차
     provider.answer_last_submission()
-    # 2주차: 1은 그대로, 2는 원문이 바뀜, 3은 목록에서 사라짐, 4는 새 공고
+    # 2주차: 1은 그대로, 2는 원문이 바뀌었어도 같은 주소, 3은 목록에서 사라짐, 4는 새 공고
     week2 = [notice(1), notice(2, raw_text="바뀐 원문"), notice(4)]
 
     saved, batch_id = job.run(conn, week2, NOW + timedelta(days=7), provider.submit, provider.fetch_results)
 
-    assert saved == 1 and batch_id == "batch-2"
-    assert row(conn, 1)["amount_max"] == 3_000_000  # 1만 적재됨
-    assert row(conn, 2) is None and row(conn, 3) is None  # 옛 원문 · 사라진 공고의 답은 버림
-    assert [r.custom_id for r in provider.submitted[1]] == [
-        custom_id(week2[1]),
-        custom_id(week2[2]),
-    ]  # 1은 제외
+    assert saved == 2 and batch_id == "batch-2"
+    assert row(conn, 1)["amount_max"] == 3_000_000 and row(conn, 2)["raw_text"] == "바뀐 원문"
+    assert row(conn, 3) is None  # 사라진 공고의 답은 버림
+    assert [r.custom_id for r in provider.submitted[1]] == [custom_id(week2[2])]  # 1 · 2는 이미 적재돼 제외
 
 
 def test_third_week_leaves_verified_row_alone_and_submits_nothing_new(conn):
@@ -244,9 +248,8 @@ def test_third_week_leaves_verified_row_alone_and_submits_nothing_new(conn):
         {"u": notice(1).source_url},
     )
 
-    saved, batch_id = job.run(
-        conn, [notice(1)], NOW + timedelta(days=14), provider.submit, provider.fetch_results
-    )
+    # 3주차: 1은 DB에 있어서 수집 단계에서 빠진다(fetch가 known 주소를 제외). 지난 결과가 다시 와도 짝이 없다
+    saved, batch_id = job.run(conn, [], NOW + timedelta(days=14), provider.submit, provider.fetch_results)
 
     r = row(conn, 1)
     assert (saved, batch_id) == (0, None) and (r["amount_max"], r["verified_by"]) == (777, "검수자")
@@ -270,12 +273,12 @@ def test_main_collects_notices_once_and_runs_both_steps(conn, monkeypatch, caplo
     provider = Provider()
     fetched = []
 
-    def fetch(api_key):
+    def fetch(api_key, known):
         fetched.append(api_key)
         return [notice(1), notice(2)]
 
     with caplog.at_level("INFO", logger=job.logger.name):
-        job.main(FakeEngine(conn), fetch, provider.submit, provider.fetch_results)
+        job.main(FakeEngine(conn), fetch, provider.submit, provider.fetch_results, ready=lambda: None)
 
     assert fetched == ["시험용-키"]  # 수집은 한 번
     assert len(provider.submitted) == 1 and len(provider.since) == 1  # ① ② 모두 실행됨
@@ -285,7 +288,7 @@ def test_main_collects_notices_once_and_runs_both_steps(conn, monkeypatch, caplo
 def test_main_without_public_data_key_fails_before_any_work(monkeypatch):
     monkeypatch.setenv("PUBLIC_DATA_API_KEY", "")
 
-    def fetch(api_key):
+    def fetch(api_key, known):
         raise AssertionError("수집하면 안 된다")
 
     with pytest.raises(RuntimeError, match="PUBLIC_DATA_API_KEY"):
@@ -296,5 +299,43 @@ def test_main_is_not_implemented_until_provider_is_connected(conn, monkeypatch):
     """운영 제공사를 연결하기 전에는 run_weekly가 '미구현'으로 기록한다."""
     monkeypatch.setenv("PUBLIC_DATA_API_KEY", "시험용-키")
 
+    def fetch(key, known):
+        pytest.fail("제공사가 준비되지 않았는데 수집을 시작했다")
+
     with pytest.raises(NotImplementedError):
-        job.main(FakeEngine(conn), lambda key: [notice(1)])
+        job.main(FakeEngine(conn), fetch)
+
+
+def test_main_passes_stored_urls_to_fetch(conn, monkeypatch):
+    """재처리 방지: DB에 있는 공고의 source_url을 수집 함수에 넘긴다(주소 없는 행은 뺀다)."""
+    monkeypatch.setenv("PUBLIC_DATA_API_KEY", "시험용-키")
+    base = {"amount_max": 0, "eligibility": {"and": []}}
+    job.upsert_programs(conn, [{**base, "name": "있음", "source_url": "https://example.test/known"}])
+    conn.execute(
+        text("INSERT INTO support_program (name, amount_max, eligibility) VALUES ('주소 없음', 0, '{}')")
+    )  # 주소가 없는 행(옛 데이터)은 known에서 뺀다
+    seen = []
+
+    def fetch(api_key, known):
+        seen.append(known)
+        return []
+
+    provider = Provider()
+    job.main(FakeEngine(conn), fetch, provider.submit, provider.fetch_results, ready=lambda: None)
+
+    assert "https://example.test/known" in seen[0] and None not in seen[0]
+
+
+def test_run_reads_industries_from_db_and_passes_names_to_the_prompt(conn):
+    """업종 소분류는 CSV가 아니라 industry 표에서 읽는다(구와 같은 방식). 이름만 프롬프트에 들어간다."""
+    conn.execute(
+        text(
+            "INSERT INTO industry (industry_code, name, category) VALUES ('CS299999', '시험업종', '서비스업')"
+        )
+    )
+    provider = Provider()
+
+    job.run(conn, [notice(1)], now=NOW, submit=provider.submit, fetch_results=provider.fetch_results)
+
+    prompt = provider.submitted[0][0].prompt
+    assert "시험업종" in prompt and "CS299999" not in prompt

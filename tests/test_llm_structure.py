@@ -34,7 +34,6 @@ def cond(field, op, **kw):
 def result(**kw):
     return {
         "amount_max": 0,
-        "amount_evidence": "",
         "district_name": None,
         "district_evidence": "",
         "is_exclusive": False,
@@ -131,7 +130,9 @@ def test_evidence_that_only_names_the_operating_institution_is_rejected():
     assert district("구로구", "구로구 청년창업지원센터가 입주기업을 모집합니다", raw) is None
 
 
-@pytest.mark.parametrize("word", ["거주", "소재", "관내", "주민", "구민", "주소지", "사업장"])
+@pytest.mark.parametrize(
+    "word", ["거주", "소재", "관내", "주민", "구민", "주소지", "사업장", "창업 예정", "창업예정", "에서 창업"]
+)
 def test_each_region_word_is_accepted(word):
     quote = f"용산구 {word} 청년"
 
@@ -360,3 +361,86 @@ def test_structured_programs_can_be_upserted_and_stay_unverified(conn, no_sleep)
     assert row["eligibility"] == {
         "and": [node("age", ">=", 19), node("age", "<=", 39), node("unsupported", "==", "서울시 거주")]
     }
+
+
+def test_startup_plan_in_a_district_is_a_district_not_a_condition():
+    """'○○구에서 창업 예정'은 구 전용(district_code)으로만 나타난다. 센터 이름의 '창업'은 근거가 아니다."""
+    quote = "용산구에서 창업 예정인 예비창업자"
+    assert district("용산구", quote, "신청대상 " + quote) == "11170"
+    raw = "서울창업센터 용산 운영" + chr(10) + "신청대상: 창업 3년 미만 기업"
+    assert district("용산구", "서울창업센터 용산 운영", raw) is None
+
+
+def test_prompt_tells_the_model_how_to_treat_pre_founder_conditions():
+    """예비창업자 전제: 충족 조건과 지역 조건은 쓰지 않고, 기창업자 전용과 거주지는 unsupported로 쓴다."""
+    prompt = structure.PROMPT
+    assert "예비창업자" in prompt and "conditions에 쓰지 않" in prompt
+    assert '"[거주] "' in prompt and "사업자등록 필수" in prompt
+
+
+def test_prompt_counts_only_startup_support_money_as_amount():
+    """창업 지원금만 금액이다. 융자 · 상금 · 연구개발비 같은 돈은 0으로 두라고 지시한다."""
+    start = structure.PROMPT.index("1. amount_max")
+    rule = structure.PROMPT[start : structure.PROMPT.index("2. district_name")]
+    assert "창업 지원금" in rule
+    assert all(word in rule for word in ("융자", "경진대회", "연구개발비"))
+    assert "융자 한도" not in rule  # 융자 한도를 금액으로 쓰라는 옛 지시는 없다
+
+
+# ── 업종 소분류(industry_code) ──────────────────────────────────────────
+
+INDUSTRIES = {"미용실": "CS200021", "PC방": "CS200017", "노래방": "CS200030", "한식음식점": "CS100001"}
+
+
+def test_industry_code_is_converted_from_name_to_code():
+    got = structure.build_eligibility([[cond("industry_code", "==", text_value="미용실")]], True, INDUSTRIES)
+
+    assert got == {"and": [node("industry_code", "==", "CS200021")]}
+
+
+def test_industry_codes_can_be_grouped_with_or():
+    group = [cond("industry_code", "==", text_value=name) for name in ("PC방", "노래방")]
+
+    got = structure.build_eligibility([group], True, INDUSTRIES)
+
+    assert got == {
+        "and": [{"or": [node("industry_code", "==", "CS200017"), node("industry_code", "==", "CS200030")]}]
+    }
+
+
+def test_unknown_industry_name_becomes_unsupported():
+    """목록에 없는 업종 이름(제조업 등)과 코드를 그대로 쓴 값, 업종 사전이 없는 경우는 인정하지 않는다."""
+    for text_value in ("제조업", "CS100001", "음식점업"):
+        got = structure.build_eligibility(
+            [[cond("industry_code", "==", text_value=text_value)]], True, INDUSTRIES
+        )
+
+        assert got["and"][0]["field"] == "unsupported"
+    no_table = structure.build_eligibility([[cond("industry_code", "==", text_value="미용실")]], True)
+    assert no_table["and"][0]["field"] == "unsupported"
+
+
+def test_to_program_passes_industries_to_conditions():
+    res = result(conditions=[[cond("industry_code", "==", text_value="한식음식점")]])
+
+    p = structure.to_program(notice(), res, CODES, INDUSTRIES)
+
+    assert p["eligibility"] == {"and": [node("industry_code", "==", "CS100001")]}
+
+
+def test_prompt_lists_industry_names_only():
+    prompt = structure.build_prompt(notice(), ["용산구"], INDUSTRIES)
+
+    assert "미용실, PC방, 노래방, 한식음식점" in prompt
+    assert "CS200021" not in prompt  # 코드는 프롬프트에 넣지 않는다
+
+
+def test_prompt_drops_exclusions_a_pre_founder_cannot_meet():
+    """예비창업자 페르소나: 기업 전용 제외와 일반 결격사유는 빼고, 개인 신분·속성 제외만 남긴다."""
+    prompt = structure.PROMPT
+    drop, keep = prompt.index("쓰지 않는 예:"), prompt.index("쓰는 예:")
+    for word in ("휴업·폐업", "대기업", "체납", "채무불이행", "참여제한"):
+        assert word in prompt[drop:keep]
+    for word in ("공무원", "재학", "특정 연령"):
+        assert word in prompt[keep : keep + 150]
+    assert "예비창업자다" in prompt and '"[제외] "' in prompt

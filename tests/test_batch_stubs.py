@@ -13,6 +13,7 @@ from batch.jobs import build_summary_cache
 from batch.llm import client as llm_client
 
 STUBS = [
+    (llm_client.ensure_ready, ()),
     (llm_client.generate_json, ("프롬프트", {})),
     (llm_client.submit_batch, ([], {})),
     (llm_client.fetch_batch_results, (datetime(2026, 1, 1),)),

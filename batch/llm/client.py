@@ -34,6 +34,14 @@ class BatchResult:
     data: dict[str, Any] | None
 
 
+def ensure_ready() -> None:
+    """운영 제공사를 쓸 준비가 됐는지 확인한다. 안 됐으면 수집을 시작하기 전에 멈추게 예외를 올린다.
+
+    아직 연결 전이라 NotImplementedError다. 연결할 때는 키가 없으면 LLMError를 올리도록 바꾼다.
+    """
+    raise NotImplementedError("운영 제공사(Anthropic Claude)는 아직 연결 전이다(6.6)")
+
+
 def generate_json(prompt: str, schema: dict[str, Any]) -> dict[str, Any]:
     """프롬프트를 보내 schema(표준 JSON Schema)를 따르는 JSON 객체를 바로 받는다(개발 · 검증용).
 
