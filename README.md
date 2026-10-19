@@ -5,6 +5,14 @@
 - 서비스: https://town-signal.vercel.app
 - 설계 문서는 노션에만 둔다 — 「타운시그널 전체 명세」(구현 기준) · 「시스템 구조」 · 「배포」. DB 기준본은 [db/schema.sql](db/schema.sql)
 
+## 발표 자료
+
+| 날짜 | 발표 | 파일 |
+| --- | --- | --- |
+| 2026-10-20 | 중간 발표 (5분) | [PPT](docs/presentations/2026-10-20_midterm.pptx) · [슬라이드 13장 · 발표 순서](docs/presentations/README.md) |
+
+[![중간 발표 표지](docs/presentations/2026-10-20_midterm_cover.jpg)](docs/presentations/README.md)
+
 ## 한눈에 보기
 
 배치가 서빙 표를 미리 채우고, API는 그 표를 조회해 더하고 빼기만 한다. 그래서 API에는 모델이 없고 응답이 1초 안에 끝난다.
@@ -22,7 +30,7 @@ batch/        수집 · 전처리 · 학습 · 표 생성 — 작업 목록은 b
 common/       자격 판정 · 예산 · 점수 계산(순수 함수, api와 batch가 같이 씀)
 db/           schema.sql
 data/         seed · dev(더미)
-docs/         노션 문서에 들어가는 그림
+docs/         노션 문서에 들어가는 그림 · 발표 자료(presentations/)
 tests/
 compose.prod.yml   운영(EC2) 구성 · docker-compose.yml 로컬 구성
 ```
