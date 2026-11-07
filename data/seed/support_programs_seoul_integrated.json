@@ -1,0 +1,722 @@
+[
+ {
+  "name": "산업스마트화 공모사업",
+  "agency": "성북구",
+  "amount_max": 0,
+  "district_code": "11290",
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": [
+    {
+     "field": "age",
+     "op": "<=",
+     "value": 39
+    },
+    {
+     "field": "unsupported",
+     "op": "==",
+     "value": "성북구 거주"
+    }
+   ]
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p23-2",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.23 사업화 2번]\n사업명: 산업스마트화 공모사업\n사업개요: 초기 자립기반 마련을 위한 사업비 등을 지원 함으로써 지역 창업활성화를 통한 일자리 창출에 기여\n지원내용: ①사업화 자금 ②심층멘토링\n지원대상: ①성북구 거주 ②만39세 이하 ③창업3년이내 초기창업자 및 예비창업자\n예산: 0.27억원 / 사업공고일: ‘26.2월 (예정) / 소관: 성북구 / 전담(주관): 성북구 (일자리 정책과)",
+  "benefit_types": [
+   "현금",
+   "교육·멘토링"
+  ],
+  "benefit_summary": "①사업화 자금 ②심층멘토링 — 초기 자립기반 마련을 위한 사업비 등을 지원 함으로써 지역 창업활성화를 통한 일자리 창출에 기여",
+  "announce_period": "‘26.2월(예정)",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요 · 현금 지원 있으나 금액 미확인이라 amount_max=0"
+  ]
+ },
+ {
+  "name": "창업기업 단계별 성장 지원",
+  "agency": "관악구 (일자리 벤처과)",
+  "amount_max": 0,
+  "district_code": "11620",
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": []
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p23-3",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.23 사업화 3번]\n사업명: 창업기업 단계별 성장 지원\n사업개요: 체계적이고 전문적인 창업 기업 지원시스템 운영을 통한 관악S밸리 혁신 창업 생태계 확산에 기여\n지원내용: ①기술컨설팅 ②오픈이노베이션 ③스타트업 스케일업\n지원대상: 관악구 창업 7년 미만(예비)창업기업\n예산: 0.9억원 / 사업공고일: ’26.3월 / 소관: 관악구 (일자리 벤처과) / 전담(주관): 관악중소벤처 진흥원 (관악S밸리 활성화팀)",
+  "benefit_types": [
+   "교육·멘토링"
+  ],
+  "benefit_summary": "①기술컨설팅 ②오픈이노베이션 ③스타트업 스케일업 — 체계적이고 전문적인 창업 기업 지원시스템 운영을 통한 관악S밸리 혁신 창업 생태계 확산에 기여",
+  "announce_period": "’26.3월",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요"
+  ]
+ },
+ {
+  "name": "사회적경제 문화 예술 청년 창업 지원 프로젝트",
+  "agency": "서초구청 (일자리 경제과)",
+  "amount_max": 0,
+  "district_code": "11650",
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": [
+    {
+     "field": "age",
+     "op": ">=",
+     "value": 19
+    },
+    {
+     "field": "age",
+     "op": "<=",
+     "value": 39
+    },
+    {
+     "field": "unsupported",
+     "op": "==",
+     "value": "사회적경제 창업 아이디어"
+    }
+   ]
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p23-4",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.23 사업화 4번]\n사업명: 사회적경제 문화 예술 청년 창업 지원 프로젝트\n사업개요: 서초구의 문화·예술 자원을 활용하여 지역사회 문제 해결을 위한 사회적경제 창업 아이디어를 가지고 있는 청년들의 창업 활동 및 사업 안정화를 지원\n지원내용: ①사업화 자금 - 사업비 지원 - 임차료 지원 ②역량강화교육\n지원대상: 19세 이상 39세 이하 예비∙초기 청년 창업자\n예산: 3.2억원 / 사업공고일: ‘26.1월 / 소관: 서초구청 (일자리 경제과) / 전담(주관): 서초구청 (일자리 경제과)",
+  "benefit_types": [
+   "현금",
+   "교육·멘토링"
+  ],
+  "benefit_summary": "①사업화 자금 - 사업비 지원 - 임차료 지원 ②역량강화교육 — 서초구의 문화·예술 자원을 활용하여 지역사회 문제 해결을 위한 사회적경제 창업 아이디어를 가지고 있는 청년들의 창업 활동 및 사업 안정화를 지원",
+  "announce_period": "‘26.1월",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요 · 현금 지원 있으나 금액 미확인이라 amount_max=0"
+  ]
+ },
+ {
+  "name": "서울시 청년 쿡 비즈니스‧푸드테크 센터",
+  "agency": "서울특별시 (청년사업 담당관)",
+  "amount_max": 0,
+  "district_code": null,
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": [
+    {
+     "field": "age",
+     "op": ">=",
+     "value": 19
+    },
+    {
+     "field": "age",
+     "op": "<=",
+     "value": 39
+    },
+    {
+     "field": "unsupported",
+     "op": "==",
+     "value": "식품제조업·푸드테크 분야"
+    }
+   ]
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p61-1",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.61 시설·공간·보육 1번]\n사업명: 서울시 청년 쿡 비즈니스‧푸드테크 센터\n사업개요: 식품제조업‧푸드테크 분야 청년 스타트업에 사업화 자금, 멘토링, 판로개척 등 지원\n지원내용: ①사업화 자금 ②사무공간‧공유 주방 제공 ③멘토링 ④판로개척 ⑤네트워킹\n지원대상: 대표자가 19~39세인 (시)제품을 보유한 식품제조업‧푸드 테크 분야 (예비) 창업팀\n예산: 10억원 / 사업공고일: ’26.2월 / 소관: 서울특별시 (청년사업 담당관) / 전담(주관): 청년사업 담당관",
+  "benefit_types": [
+   "현금",
+   "공간",
+   "교육·멘토링",
+   "투자·판로·네트워크"
+  ],
+  "benefit_summary": "①사업화 자금 ②사무공간‧공유 주방 제공 ③멘토링 ④판로개척 ⑤네트워킹 — 식품제조업‧푸드테크 분야 청년 스타트업에 사업화 자금, 멘토링, 판로개척 등 지원",
+  "announce_period": "’26.2월",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요 · 현금 지원 있으나 금액 미확인이라 amount_max=0"
+  ]
+ },
+ {
+  "name": "서울창업디딤터",
+  "agency": "서울특별시 (창업정책과)",
+  "amount_max": 0,
+  "district_code": null,
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": []
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p62-8",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.62 시설·공간·보육 8번]\n사업명: 서울창업디딤터\n사업개요: 서울 동북부 지역의 우수한 예비창업자 및 초기창업자 의 발굴, 육성을 통해 지역 창업생태계 도모\n지원내용: ①BM구축지원 ②멘토링 ③ 테 스 트 베 드 (PoC) ④IR상담 및 시\n지원대상: 예비창업자, 3년 미만 초기창 업기업\n예산: 8.38억원 / 사업공고일: ’26.1월, 7월 / 소관: 서울특별시 (창업정책과) / 전담(주관): 키스트 이노베이션(주)",
+  "benefit_types": [
+   "공간",
+   "교육·멘토링",
+   "투자·판로·네트워크"
+  ],
+  "benefit_summary": "①BM구축지원 ②멘토링 ③ 테 스 트 베 드 (PoC) ④IR상담 및 시 — 서울 동북부 지역의 우수한 예비창업자 및 초기창업자 의 발굴, 육성을 통해 지역 창업생태계 도모",
+  "announce_period": "’26.1월,7월",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요"
+  ]
+ },
+ {
+  "name": "서울디자인창업 센터 운영‧관리 사업",
+  "agency": "서울시 (디자인 산업담담관 /디자인 산업정책팀)",
+  "amount_max": 0,
+  "district_code": null,
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": [
+    {
+     "field": "age",
+     "op": "<=",
+     "value": 39
+    },
+    {
+     "field": "unsupported",
+     "op": "==",
+     "value": "디자인 분야"
+    }
+   ]
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p64-14",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.64 시설·공간·보육 14번]\n사업명: 서울디자인창업 센터 운영‧관리 사업\n사업개요: 차세대 청년 디자이너들 의 활발한 스타트업 창 업을 위해 서울시와 서 울디자인재단이 조성∙운 영하는 디자인 스타트업 인큐베이팅 플랫폼 운영 사업\n지원내용: ①시설‧공간‧보육 ②멘토링‧컨설팅· 교육\n지원대상: 서울, 만 39세 이하, 예비 창업 가 및 창업 7년 이하 (공고 시점 변경 가능)\n예산: 14.99억원 / 사업공고일: ’26.3월 / 소관: 서울시 (디자인 산업담담관 /디자인 산업정책팀) / 전담(주관): 서울 디자인재단 (창업팀)",
+  "benefit_types": [
+   "공간",
+   "교육·멘토링"
+  ],
+  "benefit_summary": "①시설‧공간‧보육 ②멘토링‧컨설팅· 교육 — 차세대 청년 디자이너들 의 활발한 스타트업 창 업을 위해 서울시와 서 울디자인재단이 조성∙운 영하는 디자인 스타트업 인큐베이팅 플랫폼 운영 사업",
+  "announce_period": "’26.3월",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요"
+  ]
+ },
+ {
+  "name": "창업보육실 입주기업 모집",
+  "agency": "성동구청 지역경제과 (기업활성화팀)",
+  "amount_max": 0,
+  "district_code": "11200",
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": []
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p64-15",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.64 시설·공간·보육 15번]\n사업명: 창업보육실 입주기업 모집\n사업개요: 예비 창업가와 신생기업 의 성장을 지원하기 위한 사업\n지원내용: ①사무공간 제공 ②창업컨설팅 지 원\n지원대상: 예비창업자 및 신생기업\n예산: 0.036억원 / 사업공고일: ’26. 4월 / 소관: 성동구청 지역경제과 (기업활성화팀) / 전담(주관): 성동구청 지역경제과 (기업활성화팀)",
+  "benefit_types": [
+   "공간",
+   "교육·멘토링"
+  ],
+  "benefit_summary": "①사무공간 제공 ②창업컨설팅 지 원 — 예비 창업가와 신생기업 의 성장을 지원하기 위한 사업",
+  "announce_period": "’26.4월",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요"
+  ]
+ },
+ {
+  "name": "광진경제허브센터",
+  "agency": "광진구청 (지역경제과)",
+  "amount_max": 0,
+  "district_code": "11215",
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": []
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p64-16",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.64 시설·공간·보육 16번]\n사업명: 광진경제허브센터\n사업개요: 미래 성장동력이 있는 초기 창업기업을 발굴하여 성장 가능성이 높은 기업에 대해 투자연계 및 지원체계 구축 을 위한 광진경제허브센터 운영\n지원내용: ①시설‧공간‧보육 ②멘토링‧컨설팅· 교육\n지원대상: 예비창업자 및 초기(3년 이내 창업자), 벤처인증 기업\n예산: 4억원 / 사업공고일: ’26.4월 / 소관: 광진구청 (지역경제과) / 전담(주관): 엔슬파트너스",
+  "benefit_types": [
+   "공간",
+   "교육·멘토링",
+   "투자·판로·네트워크"
+  ],
+  "benefit_summary": "①시설‧공간‧보육 ②멘토링‧컨설팅· 교육 — 미래 성장동력이 있는 초기 창업기업을 발굴하여 성장 가능성이 높은 기업에 대해 투자연계 및 지원체계 구축 을 위한 광진경제허브센터 운영",
+  "announce_period": "’26.4월",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요"
+  ]
+ },
+ {
+  "name": "중랑창업지원센터",
+  "agency": "서울 중랑구 (기업지원과)",
+  "amount_max": 0,
+  "district_code": "11260",
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": []
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p64-17",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.64 시설·공간·보육 17번]\n사업명: 중랑창업지원센터\n사업개요: 유망 기업을 조기 발굴하여 신성장 동력과 기업가 정신을 갖춘 우량기업으로 육성, 지역경제 활성화 및 일자리 창출 기여\n지원내용: ①창업 공간 제공 ②교육 및 컨설팅 ③기업 간 네트 워킹 ④투자유치 지원\n지원대상: 창업 7년 미만 기업 예비창업자\n예산: 0.8억원 / 사업공고일: ’26.7월, 12월 / 소관: 서울 중랑구 (기업지원과) / 전담(주관): 중랑창업 지원센터",
+  "benefit_types": [
+   "공간",
+   "교육·멘토링",
+   "투자·판로·네트워크"
+  ],
+  "benefit_summary": "①창업 공간 제공 ②교육 및 컨설팅 ③기업 간 네트 워킹 ④투자유치 지원 — 유망 기업을 조기 발굴하여 신성장 동력과 기업가 정신을 갖춘 우량기업으로 육성, 지역경제 활성화 및 일자리 창출 기여",
+  "announce_period": "’26.7월,12월",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요"
+  ]
+ },
+ {
+  "name": "1인창조기업지원 센터",
+  "agency": "서울시 성북구",
+  "amount_max": 0,
+  "district_code": "11290",
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": [
+    {
+     "field": "unsupported",
+     "op": "==",
+     "value": "1인 창조기업"
+    }
+   ]
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p64-18",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.64 시설·공간·보육 18번]\n사업명: 1인창조기업지원 센터\n사업개요: 사무공간 제공, 창업과 경영에 필요한 전문가\n지원내용: ① 입주공간 ② 전문가 멘토링\n지원대상: 1인 창조기업 및 예비창업자\n예산: 1.6억원 / 사업공고일: 상시 / 소관: 서울시 성북구 / 전담(주관): 성북구 (성북구상공회)",
+  "benefit_types": [
+   "공간",
+   "교육·멘토링"
+  ],
+  "benefit_summary": "① 입주공간 ② 전문가 멘토링 — 사무공간 제공, 창업과 경영에 필요한 전문가",
+  "announce_period": "상시",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요"
+  ]
+ },
+ {
+  "name": "벤처창업지원센터 운영",
+  "agency": "서울시 성북구",
+  "amount_max": 0,
+  "district_code": "11290",
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": []
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p65-19",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.65 시설·공간·보육 19번]\n사업명: 벤처창업지원센터 운영\n사업개요: 대학ㆍ연구소 등을 창 업보육센터로 지정하여 초기창업자에게 사업공간, 경영ㆍ기술자문 등 창업 기업에 성장기회 제공\n지원내용: ①보육역량 강화지 원 ②공간제공 ③사업화자금\n지원대상: 3년 이내 창업기업 및 예비창업자\n예산: 1.2억원 / 사업공고일: 연 2회 (2월,8월) / 소관: 서울시 성북구 / 전담(주관): (사)한국창업 보육협회 (한성대학교)",
+  "benefit_types": [
+   "현금",
+   "공간"
+  ],
+  "benefit_summary": "①보육역량 강화지 원 ②공간제공 ③사업화자금 — 대학ㆍ연구소 등을 창 업보육센터로 지정하여 초기창업자에게 사업공간, 경영ㆍ기술자문 등 창업 기업에 성장기회 제공",
+  "announce_period": "연2회(2월,8월)",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요 · 현금 지원 있으나 금액 미확인이라 amount_max=0"
+  ]
+ },
+ {
+  "name": "중장년기술창업 센터",
+  "agency": "서울시 성북구",
+  "amount_max": 0,
+  "district_code": "11290",
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": [
+    {
+     "field": "age",
+     "op": ">=",
+     "value": 40
+    }
+   ]
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p65-20",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.65 시설·공간·보육 20번]\n사업명: 중장년기술창업 센터\n사업개요: 중장년(만 40세이상)의 창업을 지원함으로써 일자리 창출과 지역경제 활성화 도모\n지원내용: ①사업화자금 ②창업교육 ③전문가 멘토링, 네트워킹 등\n지원대상: ① 만 40세 이상, ② 창업 3년 미만의 (예비)창업자\n예산: 0.3억원 / 사업공고일: 연 4회 (2월, 4월, 8월, 10월) / 소관: 서울시 성북구 / 전담(주관): 창업진흥원 (한성대학교)",
+  "benefit_types": [
+   "현금",
+   "공간",
+   "교육·멘토링",
+   "투자·판로·네트워크"
+  ],
+  "benefit_summary": "①사업화자금 ②창업교육 ③전문가 멘토링, 네트워킹 등 — 중장년(만 40세이상)의 창업을 지원함으로써 일자리 창출과 지역경제 활성화 도모",
+  "announce_period": "연4회(2월,4월,8월,10월)",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요 · 현금 지원 있으나 금액 미확인이라 amount_max=0"
+  ]
+ },
+ {
+  "name": "도봉구 중소기 업창업보육센터",
+  "agency": "도봉구 (지역경제과)",
+  "amount_max": 0,
+  "district_code": "11320",
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": []
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p65-21",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.65 시설·공간·보육 21번]\n사업명: 도봉구 중소기 업창업보육센터\n사업개요: 역세권의 창업 사무공간 을 시세 대비 저렴한 임대료로 제공하여 창업 기업의 안정적인 성장을 지원하는 사업\n지원내용: ①입주공간 ②임대료, 보증금 등 각종 요금 ③창업교육 및 컨설팅\n지원대상: 예비 및 설립 7 년 미만 창업자\n예산: 1.8억원 / 사업공고일: 연중 수시 / 소관: 도봉구 (지역경제과) / 전담(주관): 도봉구 (지역경제과)",
+  "benefit_types": [
+   "공간",
+   "교육·멘토링",
+   "융자"
+  ],
+  "benefit_summary": "①입주공간 ②임대료, 보증금 등 각종 요금 ③창업교육 및 컨설팅 — 역세권의 창업 사무공간 을 시세 대비 저렴한 임대료로 제공하여 창업 기업의 안정적인 성장을 지원하는 사업",
+  "announce_period": "연중수시",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요"
+  ]
+ },
+ {
+  "name": "은평창업지원센 터 입주기업 모집",
+  "agency": "은평구청",
+  "amount_max": 0,
+  "district_code": "11380",
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": []
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p65-22",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.65 시설·공간·보육 22번]\n사업명: 은평창업지원센 터 입주기업 모집\n사업개요: 은평구 특성에 맞는 창업기업 발굴을 통해 입주공간을 제공하고 기업 영위를 위한 컨설팅 및 교육을 제공하여 기업 육성을 지원하고자 함.\n지원내용: ①입주공간 제공 ②사업화자금 일 부 지원 ③네트워킹 지원 ④창업교육 제공\n지원대상: 예비창업가 및 초기창업가(3년 이내 창업기업)\n예산: 3.2억원 / 사업공고일: ’26.2월 /‘26.8월 / 소관: 은평구청 / 전담(주관): 은평창업 지원센터",
+  "benefit_types": [
+   "현금",
+   "공간",
+   "교육·멘토링",
+   "투자·판로·네트워크"
+  ],
+  "benefit_summary": "①입주공간 제공 ②사업화자금 일 부 지원 ③네트워킹 지원 ④창업교육 제공 — 은평구 특성에 맞는 창업기업 발굴을 통해 입주공간을 제공하고 기업 영위를 위한 컨설팅 및 교육을 제공하여 기업 육성을 지원하고자 함.",
+  "announce_period": "’26.2월/‘26.8월",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요 · 현금 지원 있으나 금액 미확인이라 amount_max=0"
+  ]
+ },
+ {
+  "name": "서대문구 -서울시립대학교 창업지원센터 운영",
+  "agency": "서대문구 (지역 경제과)",
+  "amount_max": 0,
+  "district_code": "11410",
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": []
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p66-23",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.66 시설·공간·보육 23번]\n사업명: 서대문구 -서울시립대학교 창업지원센터 운영\n사업개요: 기술성과 사업성이 있는 초기 창업기업을 대상으로 창업 지원 서비스를 제공 함으로써 창업기업들의 안정적인 성장과 지역경제 활성화에 기여\n지원내용: ①입주공간 ②교육 및 컨설팅 ③사업화 지원\n지원대상: 예비창업자 및 창업 7년 이내 기업\n예산: 0.35억원 / 사업공고일: 연중 수시 / 소관: 서대문구 (지역 경제과) / 전담(주관): 서울시립대학 교 창업지원단",
+  "benefit_types": [
+   "공간",
+   "교육·멘토링"
+  ],
+  "benefit_summary": "①입주공간 ②교육 및 컨설팅 ③사업화 지원 — 기술성과 사업성이 있는 초기 창업기업을 대상으로 창업 지원 서비스를 제공 함으로써 창업기업들의 안정적인 성장과 지역경제 활성화에 기여",
+  "announce_period": "연중수시",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요"
+  ]
+ },
+ {
+  "name": "마포비즈니스센터",
+  "agency": "마포구 경제진흥과",
+  "amount_max": 0,
+  "district_code": "11440",
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": []
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p66-24",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.66 시설·공간·보육 24번]\n사업명: 마포비즈니스센터\n사업개요: 기술 및 사업성은 있으나 정보 및 경영자원 부족으로 어려움을 겪고 있는 (예비) 창업자를 보육센터에 입주 시켜 경영·기술·설비 등을 지원\n지원내용: 창업보육 (경영·기술·설비 등)\n지원대상: 예비창업자 또는 창업 7년 이내 기업\n예산: 1.5억원 / 사업공고일: 공실 발생에 따라 수시 / 소관: 마포구 경제진흥과 / 전담(주관): 마포구 (홍익대 산학협력단)",
+  "benefit_types": [
+   "공간"
+  ],
+  "benefit_summary": "창업보육 (경영·기술·설비 등) — 기술 및 사업성은 있으나 정보 및 경영자원 부족으로 어려움을 겪고 있는 (예비) 창업자를 보육센터에 입주 시켜 경영·기술·설비 등을 지원",
+  "announce_period": "공실발생에따라수시",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요"
+  ]
+ },
+ {
+  "name": "마포구 중장년 기술창업센터",
+  "agency": "마포구 경제진흥과",
+  "amount_max": 0,
+  "district_code": "11440",
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": [
+    {
+     "field": "age",
+     "op": ">=",
+     "value": 40
+    }
+   ]
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p66-25",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.66 시설·공간·보육 25번]\n사업명: 마포구 중장년 기술창업센터\n사업개요: 창업아이템을 보유하고 있으나 자금 정보부족 으로 어려움을 겪고 있는 중장년 창업자들에게 공간 및 장비, 경영지원 등을 통해 창업 기회 제공\n지원내용: 창업보육 (경영·기술·설비 등)\n지원대상: 만 40세 이상 예비 창업자\n예산: 0.2억원 / 사업공고일: 공실 발생에 따라 수시 / 소관: 마포구 경제진흥과 / 전담(주관): 마포구 (홍익대 산학협력단)",
+  "benefit_types": [
+   "공간"
+  ],
+  "benefit_summary": "창업보육 (경영·기술·설비 등) — 창업아이템을 보유하고 있으나 자금 정보부족 으로 어려움을 겪고 있는 중장년 창업자들에게 공간 및 장비, 경영지원 등을 통해 창업 기회 제공",
+  "announce_period": "공실발생에따라수시",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요"
+  ]
+ },
+ {
+  "name": "마포구 1인창조 기업 지원센터",
+  "agency": "마포구 경제진흥과",
+  "amount_max": 0,
+  "district_code": "11440",
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": [
+    {
+     "field": "unsupported",
+     "op": "==",
+     "value": "1인 창조기업"
+    }
+   ]
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p66-26",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.66 시설·공간·보육 26번]\n사업명: 마포구 1인창조 기업 지원센터\n사업개요: 창업아이템을 보유하고 있으나 자금 정보부족 으로 어려움을 겪고 있는 중장년 창업자들에게 공간 및 장비, 경영지원 등을 통해 창업 기회 제공\n지원내용: 창업보육 (경영·기술·설비 등)\n지원대상: 타 직장에 재직중이지 않은 7년 이내(예비) 1인 창조기업 대표자\n예산: 0.2억원 / 사업공고일: 공실 발생에 따라 수시 / 소관: 마포구 경제진흥과 / 전담(주관): 마포구 (홍익대 산학협력단)",
+  "benefit_types": [
+   "공간"
+  ],
+  "benefit_summary": "창업보육 (경영·기술·설비 등) — 창업아이템을 보유하고 있으나 자금 정보부족 으로 어려움을 겪고 있는 중장년 창업자들에게 공간 및 장비, 경영지원 등을 통해 창업 기회 제공",
+  "announce_period": "공실발생에따라수시",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요"
+  ]
+ },
+ {
+  "name": "양천창업지원 센터 운영",
+  "agency": "양천구 (일자리 경제과)",
+  "amount_max": 0,
+  "district_code": "11470",
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": []
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p67-27",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.67 시설·공간·보육 27번]\n사업명: 양천창업지원 센터 운영\n사업개요: 관내 예비창업자들을 위한 창업 원스톱 지원 서비스 제공 등\n지원내용: ①공간 지원 ②창업교육 및 멘토링 ③메뉴개발, 요리 연습공간\n지원대상: 예비·초기창업자\n예산: 4.08억원 / 사업공고일: 프로그 램별 수시 공고 / 소관: 양천구 (일자리 경제과) / 전담(주관): 일자리경제과 (미담장학회)",
+  "benefit_types": [
+   "공간",
+   "교육·멘토링"
+  ],
+  "benefit_summary": "①공간 지원 ②창업교육 및 멘토링 ③메뉴개발, 요리 연습공간 — 관내 예비창업자들을 위한 창업 원스톱 지원 서비스 제공 등",
+  "announce_period": "프로그램별수시공고",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요"
+  ]
+ },
+ {
+  "name": "영등포구 중소기업 창업지원센터 운영",
+  "agency": "영등포구청 (일자리 경제과)",
+  "amount_max": 0,
+  "district_code": "11560",
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": []
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p67-28",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.67 시설·공간·보육 28번]\n사업명: 영등포구 중소기업 창업지원센터 운영\n사업개요: 사업경험이 부족한 스타트 업 기업 및 예비 창업자를 위한 창업공간 필요\n지원내용: 시설‧공간‧보육\n지원대상: 입주일부터 3개월 이내에 중소·벤처 기업 설립이 가능한 예비 창업자 -중소·벤처기업 설립한 날부터 7년 이 지나지 아니한 자\n예산: 1.6억원 / 사업공고일: ’26.1월 / 소관: 영등포구청 (일자리 경제과) / 전담(주관): -",
+  "benefit_types": [
+   "공간"
+  ],
+  "benefit_summary": "시설‧공간‧보육 — 사업경험이 부족한 스타트 업 기업 및 예비 창업자를 위한 창업공간 필요",
+  "announce_period": "’26.1월",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요"
+  ]
+ },
+ {
+  "name": "창업지원센터 운영",
+  "agency": "서울특별시 동작구",
+  "amount_max": 0,
+  "district_code": "11590",
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": [
+    {
+     "field": "age",
+     "op": "<=",
+     "value": 39
+    }
+   ]
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p67-29",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.67 시설·공간·보육 29번]\n사업명: 창업지원센터 운영\n사업개요: 기술과 아이디어는 있으나 사업화에 어려움을 겪고 있는 기업가들을 위한 활 동공간을 제공하고 창업보 육 프로그램 지원 등을 통 한 기업의 안정적인 성장 도모\n지원내용: ①입주공간 ②교육 및 멘토링 ③사업화자금\n지원대상: 7년 이내 창업기업 ※ 청년창업지원센터 39세 이하 (예비) 창업자\n예산: 2.4억원 / 사업공고일: 연중 (연1~2회) / 소관: 서울특별시 동작구 / 전담(주관): 중소기업, 청년 창업지원센터",
+  "benefit_types": [
+   "현금",
+   "공간",
+   "교육·멘토링"
+  ],
+  "benefit_summary": "①입주공간 ②교육 및 멘토링 ③사업화자금 — 기술과 아이디어는 있으나 사업화에 어려움을 겪고 있는 기업가들을 위한 활 동공간을 제공하고 창업보 육 프로그램 지원 등을 통 한 기업의 안정적인 성장 도모",
+  "announce_period": "연중(연1~2회)",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요 · 현금 지원 있으나 금액 미확인이라 amount_max=0"
+  ]
+ },
+ {
+  "name": "관악S밸리 창업공간 운영",
+  "agency": "관악구 (일자리 벤처과)",
+  "amount_max": 0,
+  "district_code": "11620",
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": []
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p67-30",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.67 시설·공간·보육 30번]\n사업명: 관악S밸리 창업공간 운영\n사업개요: 관악S밸리 창업 공간의 체계적인 효율적인 운영 을 통해 창업기업 성장 기반 마련 및 지역 창업 생태계 지속성 강화\n지원내용: ①창업공간 ②창업 교육 ③멘토링·컨설팅\n지원대상: 창업 7년 미만 (예비)창업기업\n예산: 5억원 / 사업공고일: ’26.1월 / 소관: 관악구 (일자리 벤처과) / 전담(주관): 관악중소벤처 진흥원(관악S 밸리 활성화팀)",
+  "benefit_types": [
+   "공간",
+   "교육·멘토링"
+  ],
+  "benefit_summary": "①창업공간 ②창업 교육 ③멘토링·컨설팅 — 관악S밸리 창업 공간의 체계적인 효율적인 운영 을 통해 창업기업 성장 기반 마련 및 지역 창업 생태계 지속성 강화",
+  "announce_period": "’26.1월",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요"
+  ]
+ },
+ {
+  "name": "강동구 청년해냄센터",
+  "agency": "강동구 (일자리 정책과)",
+  "amount_max": 0,
+  "district_code": "11740",
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": [
+    {
+     "field": "age",
+     "op": "<=",
+     "value": 39
+    }
+   ]
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p68-31",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.68 시설·공간·보육 31번]\n사업명: 강동구 청년해냄센터\n사업개요: 우수한 기술과 아이디어 를 보유한 청년 창업자 발굴 및 업무공간 제공, 멘토링, 창업 교육을 통한 기업 육성\n지원내용: ①사무공간 제공 ②교육 및 멘토링 ③네트워킹\n지원대상: 39세 이하, 예비~창업3년 이내 창업기업\n예산: 3.6억원 / 사업공고일: ‘25.5월, 11월 / 소관: 강동구 (일자리 정책과) / 전담(주관): ㈜희망설계",
+  "benefit_types": [
+   "공간",
+   "교육·멘토링",
+   "투자·판로·네트워크"
+  ],
+  "benefit_summary": "①사무공간 제공 ②교육 및 멘토링 ③네트워킹 — 우수한 기술과 아이디어 를 보유한 청년 창업자 발굴 및 업무공간 제공, 멘토링, 창업 교육을 통한 기업 육성",
+  "announce_period": "‘25.5월,11월",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요"
+  ]
+ },
+ {
+  "name": "청년창업지원센터 운영",
+  "agency": "구로구청 (일자리지 원과)",
+  "amount_max": 0,
+  "district_code": "11530",
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": []
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p68-32",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.68 시설·공간·보육 32번]\n사업명: 청년창업지원센터 운영\n사업개요: 청년 초기(예비)창업자를 대상으로 교육 및 멘토링 을 통한 역량강화와 고민 해소로 안정적인 창업 지원\n지원내용: 멘토링‧컨설팅·교육\n지원대상: 초기(예비)창업자\n예산: 2.5억원 / 사업공고일: ’26.1월, 7월 / 소관: 구로구청 (일자리지 원과) / 전담(주관): 동양미래 대학교 산학협력단",
+  "benefit_types": [
+   "공간",
+   "교육·멘토링"
+  ],
+  "benefit_summary": "멘토링‧컨설팅·교육 — 청년 초기(예비)창업자를 대상으로 교육 및 멘토링 을 통한 역량강화와 고민 해소로 안정적인 창업 지원",
+  "announce_period": "’26.1월,7월",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요"
+  ]
+ },
+ {
+  "name": "서초창업스테이 션운영",
+  "agency": "서초구청 (일자리경 제과)",
+  "amount_max": 0,
+  "district_code": "11650",
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": []
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p68-33",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.68 시설·공간·보육 33번]\n사업명: 서초창업스테이 션운영\n사업개요: 창업가 발굴과 지원, 창업 환경 조성으로 일자리 창출과 지역 경제 활성화 를 위한 사업\n지원내용: 멘토링‧컨설팅·교육\n지원대상: 예비∙초기 창업 자, 창업에 관심 있는 자 등\n예산: 2.2억원 / 사업공고일: 연간 상시 / 소관: 서초구청 (일자리경 제과) / 전담(주관): 서초창업스테 이션",
+  "benefit_types": [
+   "공간",
+   "교육·멘토링"
+  ],
+  "benefit_summary": "멘토링‧컨설팅·교육 — 창업가 발굴과 지원, 창업 환경 조성으로 일자리 창출과 지역 경제 활성화 를 위한 사업",
+  "announce_period": "연간상시",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요"
+  ]
+ },
+ {
+  "name": "Try Everything 2026",
+  "agency": "서울시 (창업정책과)",
+  "amount_max": 0,
+  "district_code": null,
+  "is_exclusive": false,
+  "apply_start": null,
+  "apply_end": null,
+  "eligibility": {
+   "and": []
+  },
+  "source_url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000116904#seoul-p92-1",
+  "raw_text": "[2026년 중앙부처 및 지자체 창업지원사업 통합공고(중기부 공고 제2025-648호) p.92 행사·네트워크 1번]\n사업명: Try Everything 2026\n사업개요: 국내·외 유망 스타트업과 대·중견기업, 투자자, 엑셀 러레이터 등 창업생태계 구성원들이 모여 교류하는 글로벌 스타트업 축제 ‘Try Everything 2026’ 개최\n지원내용: ①스타트업 투자 밋업 등 지원 ②혁신기술 전시 ③창업포럼 등\n지원대상: 예비 창업자, 투 자자, 창업기업, 창업에 관심 있 는 일반시민 등\n예산: 15억원 / 사업공고일: ’26.8월 / 소관: 서울시 (창업정책과) / 전담(주관): 서울경제진흥원 (스케일업2팀)",
+  "benefit_types": [
+   "투자·판로·네트워크"
+  ],
+  "benefit_summary": "①스타트업 투자 밋업 등 지원 ②혁신기술 전시 ③창업포럼 등 — 국내·외 유망 스타트업과 대·중견기업, 투자자, 엑셀 러레이터 등 창업생태계 구성원들이 모여 교류하는 글로벌 스타트업 축제 ‘Try Everything 2026’ 개최",
+  "announce_period": "’26.8월",
+  "verified_by": "박규민",
+  "review_notes": [
+   "통합공고 기준. 2026 개별 공고에서 금액 · 기간 확인 필요"
+  ]
+ }
+]
