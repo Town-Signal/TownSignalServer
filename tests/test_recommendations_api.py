@@ -314,6 +314,21 @@ def test_snapshot_before_execute_has_no_items(api_client):
     assert datetime.fromisoformat(data["created_at"]).tzinfo is not None
 
 
+def test_snapshot_reads_old_snapshot_without_other_supports(api_client, dummy_db):
+    """other_supports(2026-11-07)가 없던 옛 스냅샷도 그대로 읽고 빈 목록으로 내린다."""
+    rec_id = budgets(api_client)["rec_id"]
+    dummy_db.execute(
+        text(
+            "UPDATE recommendation SET calculated_budgets = jsonb_set(calculated_budgets, "
+            "'{district_budgets}', (SELECT jsonb_agg(d - 'other_supports') FROM jsonb_array_elements("
+            "calculated_budgets->'district_budgets') d)) WHERE rec_id = :id"
+        ),
+        {"id": rec_id},
+    )
+    data = success(api_client.get(f"{URL}/{rec_id}"))["data"]
+    assert all(d["other_supports"] == [] for d in data["district_budgets"])
+
+
 def test_snapshot_items_match_rec_item(api_client):
     step2 = budgets(api_client, capital=0)
     rows = recommend(api_client, step2["rec_id"], top_k=10)["data"]["recommendations"]

@@ -163,3 +163,35 @@ def test_confirm_target():
     assert confirm_target(REMOTE, yes=False, ask=lambda _: "yes")
     assert not confirm_target(REMOTE, yes=False, ask=lambda _: "no")
     assert not confirm_target("postgresql+psycopg://u:p@db:5432/townsignal", yes=False, ask=lambda _: "")
+
+
+# ── benefit_types(지원 형태, 2026-11-07) ──────────────────────
+
+
+def test_benefit_types_are_loaded(conn, tmp_path):
+    p = program(amount_max=0, benefit_types=["공간", "교육·멘토링", "공간"], benefit_summary="요약")
+    load_programs(conn, seed(tmp_path, [p]))
+    assert rows(conn)[0]["benefit_types"] == ["공간", "교육·멘토링"]  # 중복은 한 번만
+
+
+def test_benefit_types_default(conn, tmp_path):
+    load_programs(conn, seed(tmp_path, [program(amount_max=0), program(source_url=URL2)]))
+    assert rows(conn)[0]["benefit_types"] == []  # 금액 0 · 키 없음 → 빈 배열
+    assert rows(conn, URL2)[0]["benefit_types"] == ["현금"]  # 금액 > 0 · 빈 값 → 현금(가정)
+
+
+def test_benefit_types_update_existing_row(conn, tmp_path):
+    load_programs(conn, seed(tmp_path, [program(amount_max=0)]))
+    load_programs(conn, seed(tmp_path, [program(amount_max=0, benefit_types=["융자"])]))
+    assert [r["benefit_types"] for r in rows(conn)] == [["융자"]]
+
+
+@pytest.mark.parametrize("bad", [["대출"], "공간", [1]])
+def test_bad_benefit_types_roll_back_everything(conn, tmp_path, bad):
+    before = count(conn)
+    items = seed(tmp_path, [program(source_url=URL2), program(benefit_types=bad)])
+
+    with pytest.raises(SeedLoadError, match="2번째 공고.*benefit_types"):
+        load_programs(conn, items)
+
+    assert count(conn) == before

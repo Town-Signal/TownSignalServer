@@ -55,6 +55,7 @@ uvicorn api.main:app --reload                                             # http
 - 5432 포트를 다른 PostgreSQL이 쓰고 있으면 db가 뜨지 않는다. Docker 없이 PostgreSQL 16을 직접 설치해도 되고, 같은 `DATABASE_URL`로 붙는다.
 - `load_dev_fixtures`는 `APP_ENV=local`이고 DB가 로컬일 때만 돌고, 표를 비운 뒤 더미를 넣는다.
 - 초기화: `docker compose down -v` 후 schema.sql부터 다시.
+- 이미 만든 DB는 `db/migrations/`의 파일을 날짜순으로 한 번씩 적용한다(예: `psql -h localhost -U townsignal -d townsignal -v ON_ERROR_STOP=1 -f db/migrations/2026-11-07_support_program_benefit_types.sql`). 운영 DB에는 배포 전에 적용한다.
 
 ## 실데이터로 로컬 DB 채우기 · 모델 만들기
 

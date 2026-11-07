@@ -308,6 +308,7 @@ def upsert_programs(conn: Connection, programs: list[dict[str, Any]]) -> int:
     eligibility는 필수(없으면 KeyError, source_url이 비었으면 ValueError)이고 나머지는 없으면 None
     (is_exclusive는 False)이다. eligibility는 7.3 조건 트리 딕셔너리여야 한다(JSON 글자 등은 TypeError).
     extracted_at은 이 함수가 now()로 넣고, verified_by는 입력으로 받지 않는다(새 행은 비어 있다).
+    benefit_types(지원 형태)는 빈 배열로 넣는다(사람이 seed에서 채운다).
     그 밖의 키는 무시한다. 같은 호출에 같은 주소가 둘이면 먼저 온 것만 들어간다.
     전부 한 트랜잭션이라 한 건이라도 실패하면 이 호출에서 한 일이 모두 되돌아가고 예외가 올라간다.
     출력: 새로 넣은 행 수.
@@ -325,9 +326,9 @@ def upsert_programs(conn: Connection, programs: list[dict[str, Any]]) -> int:
             conn.execute(
                 text(
                     "INSERT INTO support_program (name, agency, amount_max, district_code, is_exclusive, "
-                    "apply_start, apply_end, eligibility, source_url, raw_text, extracted_at) "
+                    "apply_start, apply_end, eligibility, source_url, raw_text, extracted_at, benefit_types) "
                     "VALUES (:name, :agency, :amount_max, :district_code, :is_exclusive, :apply_start, "
-                    ":apply_end, CAST(:eligibility AS jsonb), :source_url, :raw_text, now())"
+                    ":apply_end, CAST(:eligibility AS jsonb), :source_url, :raw_text, now(), '{}')"
                 ),
                 values,
             )

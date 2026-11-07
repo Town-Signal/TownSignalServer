@@ -26,6 +26,7 @@ from sqlalchemy.engine import URL, make_url
 from batch import config
 from batch.jobs.build_support_program import program_values
 from batch.pipeline.db import transaction
+from common.constants import BENEFIT_CASH, BENEFIT_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -39,12 +40,15 @@ Item = tuple[str, int, dict[str, Any]]  # (파일 이름, 파일 안 번호(1부
 
 COLUMNS = (
     "name", "agency", "amount_max", "district_code", "is_exclusive", "apply_start", "apply_end",
-    "eligibility", "raw_text", "verified_by",
+    "eligibility", "raw_text", "verified_by", "benefit_types",
 )  # seed 값으로 쓰는 칼럼(source_url은 키, extracted_at은 새로 넣을 때만)
 
 
+_CASTS = {"eligibility": "jsonb", "benefit_types": "text[]"}
+
+
 def _param(column: str) -> str:
-    return "CAST(:eligibility AS jsonb)" if column == "eligibility" else f":{column}"
+    return f"CAST(:{column} AS {_CASTS[column]})" if column in _CASTS else f":{column}"
 
 
 UPDATE_SQL = text(
@@ -100,13 +104,36 @@ def _verified_by(p: dict[str, Any]) -> str | None:
     return value.strip() or None if isinstance(value, str) else None
 
 
+def _benefit_types(p: dict[str, Any]) -> list[str]:
+    """seed의 benefit_types(지원 형태). 없으면 빈 배열, 같은 값은 한 번만(순서 유지).
+
+    TODO(가정): amount_max > 0인데 비어 있으면 현금 지원으로 보고 ['현금']을 넣는다
+    (initial seed는 이 키가 없다).
+    허용 값(common.constants.BENEFIT_TYPES) 밖이면 ValueError — 적재 전체를 되돌린다.
+    """
+    value = p.get("benefit_types")
+    if value is None:
+        value = []
+    if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+        raise TypeError(f"benefit_types는 글자 리스트여야 한다: {value!r}")
+    unknown = [v for v in value if v not in BENEFIT_TYPES]
+    if unknown:
+        raise ValueError(f"benefit_types에 허용되지 않은 값: {unknown}")
+    types = list(dict.fromkeys(value))
+    if not types and p["amount_max"] > 0:
+        types = [BENEFIT_CASH]
+    return types
+
+
 def load_programs(conn: Connection, items: list[Item]) -> LoadResult:
     """seed 공고를 source_url 기준으로 넣거나 갱신한다. 전부 한 트랜잭션이다.
 
     TODO(가정): seed 파일이 사람이 고친 정본이라 같은 source_url 행은 seed 값으로 덮어쓴다(같은 주소 행이
     여럿이면 모두). 검수(verified_by)도 seed에 적는 것을 전제로 그대로 반영한다(비어 있으면 NULL) —
     DB에서 직접 채운 verified_by는 다음 적재 때 seed 값으로 바뀐다.
-    TODO(가정): support_program에 없는 키(amount_evidence 등)는 무시한다. extracted_at은 새로 넣을 때만 now().
+    benefit_types는 _benefit_types 규칙으로 넣는다.
+    TODO(가정): support_program에 없는 키(benefit_summary · announce_period · review_notes ·
+    amount_evidence 등)는 무시한다. extracted_at은 새로 넣을 때만 now().
     글자 값의 NUL(0x00)은 지우고 넣는다(_strip_nul).
     하나라도 실패하면 이 호출에서 한 일을 모두 되돌리고 몇 번째 공고 · 이유를 담은 SeedLoadError를 올린다.
     """
@@ -117,7 +144,11 @@ def load_programs(conn: Connection, items: list[Item]) -> LoadResult:
                 if not isinstance(p, dict):
                     raise TypeError(f"공고는 딕셔너리여야 한다: {type(p).__name__}")
                 p = _strip_nul(p)
-                values = {**program_values(p), "verified_by": _verified_by(p)}
+                values = {
+                    **program_values(p),
+                    "verified_by": _verified_by(p),
+                    "benefit_types": _benefit_types(p),
+                }
                 matched = conn.execute(UPDATE_SQL, values).rowcount
                 if not matched:
                     conn.execute(INSERT_SQL, values)

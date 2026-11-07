@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from api.schemas.region import BudgetSummary
-from api.schemas.types import Certificate, IndustryCode, Passed, RentConfidence
+from api.schemas.types import BenefitType, Certificate, IndustryCode, Passed, RentConfidence
 from common.constants import (
     AGE_MAX,
     AGE_MIN,
@@ -46,6 +46,17 @@ class ExcludedProgram(BaseModel):
     exclude_reason: str
 
 
+class OtherSupport(BaseModel):
+    """이 구의 다른 지원 — 금액 0 공고(공간 · 교육·멘토링 등). 가용예산에는 더하지 않는다(2026-11-07)."""
+
+    program_id: int
+    name: str
+    agency: str | None
+    benefit_types: list[BenefitType]
+    district_code: str | None  # None = 서울 전체 · 전국
+    source_url: str | None
+
+
 class DistrictBudgetResult(BaseModel):
     """기능명세서 2.3.1 자치구별 가용예산"""
 
@@ -64,6 +75,8 @@ class DistrictBudgetResult(BaseModel):
     rent_per_sqm: float | None  # 천원/㎡ · 월
     geo_code: str | None  # 자치구 GeoJSON 코드
     unavailable_reason: UnavailableReason | None
+    # 2026-11-07 추가. 기본값은 이 필드가 없던 옛 recommendation 스냅샷(⑤ 재조회)을 읽기 위해서다
+    other_supports: list[OtherSupport] = Field(default_factory=list)
 
 
 class BudgetCalculationResponse(BaseModel):
