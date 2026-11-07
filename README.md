@@ -79,7 +79,12 @@ pg_restore -h localhost -U <슈퍼유저> -d townsignal --data-only --disable-tr
 # 3) 확인 — 기대값: 구 25 · 동 425 · 업종 100 · 인허가 약 82만
 psql -h localhost -U townsignal -d townsignal -c \
   "SELECT (SELECT count(*) FROM district) 구, (SELECT count(*) FROM dong) 동, (SELECT count(*) FROM industry) 업종, (SELECT count(*) FROM business_license) 인허가;"
+
+# 4) 지원사업 seed(data/seed의 initial_support_programs.json · support_programs_*.json) 넣기 — 다시 돌려도 중복 없이 seed 값으로 갱신
+python -m batch.jobs.load_support_seed
 ```
+
+- 주의: 4) 뒤에 `load_dev_fixtures`를 `--force`로 다시 돌리면 seed 지원사업도 같이 지워진다(그때는 4)를 다시 실행한다).
 
 | 로컬 DB | 슈퍼유저 | 명령 앞에 붙일 것 |
 | --- | --- | --- |
