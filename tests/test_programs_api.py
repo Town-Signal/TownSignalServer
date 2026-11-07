@@ -8,6 +8,7 @@
 from datetime import date
 
 import pytest
+from sqlalchemy import text
 
 from api.deps import get_today
 from tests.api_helpers import FIXED_TODAY, failure, single_error, success
@@ -66,30 +67,66 @@ def ids(body) -> list[int]:
     return [item["program_id"] for item in body["data"]["items"]]
 
 
+def add_program(conn, name, amount, apply_end, verified="검수자"):
+    conn.execute(
+        text(
+            "INSERT INTO support_program (name, amount_max, eligibility, source_url, verified_by, apply_end) "
+            "VALUES (:name, :amount, '{\"and\": []}', :url, :verified, :end)"
+        ),
+        {"name": name, "amount": amount, "url": f"https://example.test/{name}", "verified": verified,
+         "end": apply_end},
+    )
+
+
 def test_upcoming_order_and_filter(api_client):
     assert FIXED_TODAY == date(2026, 10, 5)
     body = success(api_client.get("/api/programs/upcoming"))
-    # 마감일 오름차순, 상시(#3)는 맨 뒤. 마감된 #4 · 미검수 #10은 없다
-    assert ids(body) == [5, 2, 8, 1, 9, 7, 6, 11, 3]
+    # 모집 중 마감 가까운 순, 그다음 마감된 #4. 기간 없는 #3 · 미검수 #10은 없다
+    assert ids(body) == [5, 2, 8, 1, 9, 7, 6, 11, 4]
     assert body["data"]["total"] == 9
     first, last = body["data"]["items"][0], body["data"]["items"][-1]
-    assert (first["district_name"], first["apply_end"]) == ("관악구", "2026-10-06")
-    assert first["always_open"] is False
-    assert (last["district_name"], last["apply_end"], last["always_open"]) == ("전국", None, True)
+    pick = ("district_name", "apply_end", "status")
+    assert tuple(first[k] for k in pick) == ("관악구", "2026-10-06", "모집 중")
+    assert tuple(last[k] for k in pick) == ("전국", "2025-12-31", "마감")
+    assert all("always_open" not in item for item in body["data"]["items"])
     assert body["meta"]["base_quarter"] is None
 
 
-def test_upcoming_deadline_today_included(api_client):
+def test_upcoming_item_shape(api_client):
+    item = success(api_client.get("/api/programs/upcoming"))["data"]["items"][0]
+    assert set(item) == {
+        "program_id", "name", "agency", "amount_max", "district_code", "district_name",
+        "apply_start", "apply_end", "source_url", "status",
+    }
+
+
+def test_upcoming_deadline_today_is_open(api_client):
     api_client.app.dependency_overrides[get_today] = lambda: date(2026, 10, 6)  # #5 마감일
-    assert ids(success(api_client.get("/api/programs/upcoming")))[0] == 5
+    first = success(api_client.get("/api/programs/upcoming"))["data"]["items"][0]
+    assert (first["program_id"], first["status"]) == (5, "모집 중")
+
+
+def test_upcoming_closed_after_open_most_recent_first(api_client):
     api_client.app.dependency_overrides[get_today] = lambda: date(2026, 10, 7)
-    assert 5 not in ids(success(api_client.get("/api/programs/upcoming")))
+    body = success(api_client.get("/api/programs/upcoming"))
+    assert ids(body) == [2, 8, 1, 9, 7, 6, 11, 5, 4]  # #5(10-06 마감)가 #4(2025-12-31)보다 먼저
+    assert [i["status"] for i in body["data"]["items"]] == ["모집 중"] * 7 + ["마감"] * 2
 
 
-def test_upcoming_only_always_open_after_all_deadlines(api_client):
+def test_upcoming_all_closed(api_client):
     api_client.app.dependency_overrides[get_today] = lambda: date(2027, 1, 1)
     body = success(api_client.get("/api/programs/upcoming"))
-    assert ids(body) == [3] and body["data"]["total"] == 1
+    assert ids(body) == [11, 6, 7, 9, 1, 8, 2, 5, 4] and body["data"]["total"] == 9
+    assert {i["status"] for i in body["data"]["items"]} == {"마감"}
+
+
+def test_upcoming_excludes_zero_amount_and_no_period(api_client, dummy_db):
+    add_program(dummy_db, "금액 0 공간 지원", 0, date(2026, 10, 20))
+    add_program(dummy_db, "기간 없는 현금 지원", 5_000_000, None)
+    add_program(dummy_db, "미검수 현금 지원", 5_000_000, date(2026, 10, 20), verified=None)
+    body = success(api_client.get("/api/programs/upcoming"))
+    assert body["data"]["total"] == 9
+    assert ids(body) == [5, 2, 8, 1, 9, 7, 6, 11, 4]
 
 
 def test_upcoming_limit(api_client):

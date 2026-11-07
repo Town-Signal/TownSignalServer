@@ -90,9 +90,10 @@ class BudgetCalculationResponse(BaseModel):
     district_budgets: list[DistrictBudgetResult]  # 25개, available_budget 내림차순
 
 
-class UpcomingProgram(BaseModel):
-    """기능명세서 1.1.3"""
+UpcomingStatus = Literal["모집 중", "마감"]
 
+
+class ProgramBase(BaseModel):
     program_id: int
     name: str
     agency: str | None
@@ -101,11 +102,18 @@ class UpcomingProgram(BaseModel):
     district_name: str  # 전국이면 "전국"
     apply_start: date | None
     apply_end: date | None
-    always_open: bool  # apply_end가 None이면 True
     source_url: str | None
 
 
-class ProgramDetail(UpcomingProgram):
+class UpcomingProgram(ProgramBase):
+    """기능명세서 1.1.3. 현금 지원 · 마감일 있는 공고만이라 always_open은 두지 않는다(2026-11-07)."""
+
+    apply_end: date
+    status: UpcomingStatus  # apply_end ≥ 오늘이면 "모집 중"
+
+
+class ProgramDetail(ProgramBase):
+    always_open: bool  # apply_end가 None이면 True
     is_exclusive: bool
     eligibility: dict[str, Any]
     raw_text: str | None
