@@ -8,7 +8,7 @@ from sqlalchemy import text
 
 from batch.jobs import build_support_program as job
 from batch.jobs.build_support_program import RawNotice
-from batch.llm.client import BatchResult
+from batch.llm.client import BatchResult, LLMError
 from batch.llm.structure import custom_id
 
 CODES = {"용산구": "11170", "구로구": "11530"}
@@ -295,14 +295,15 @@ def test_main_without_public_data_key_fails_before_any_work(monkeypatch):
         job.main(None, fetch)
 
 
-def test_main_is_not_implemented_until_provider_is_connected(conn, monkeypatch):
-    """운영 제공사를 연결하기 전에는 run_weekly가 '미구현'으로 기록한다."""
+def test_main_without_llm_key_stops_before_collecting(conn, monkeypatch):
+    """LLM 키가 없으면 수집을 시작하기 전에 멈춘다(수집을 다 하고 나서 실패하지 않는다)."""
     monkeypatch.setenv("PUBLIC_DATA_API_KEY", "시험용-키")
+    monkeypatch.setenv("LLM_API_KEY", "")
 
     def fetch(key, known):
         pytest.fail("제공사가 준비되지 않았는데 수집을 시작했다")
 
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(LLMError, match="LLM_API_KEY"):
         job.main(FakeEngine(conn), fetch)
 
 

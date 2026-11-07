@@ -37,6 +37,12 @@ MIN_STORE_COUNT = 5
 # 요청 경로가 읽는 prediction.model_version (5.2)
 SERVING_MODEL_VERSION = "xgb_v1"
 
+# LLM 호출 (6.6 · 판정 39). 공고 구조화 · 요약 모델은 15장 5번에서 확정하기 전까지 같은 값을 쓴다
+LLM_MODEL = "claude-opus-5-5"
+LLM_EFFORT = "medium"  # TODO(가정): 추출 정확도를 보고 high로 올린다(Opus 5.5 기본값은 medium)
+LLM_MAX_TOKENS = 16000  # 공고 한 건의 구조화 출력은 짧다. 생각(thinking)도 이 안에서 쓴다
+LLM_MAX_RETRIES = 5  # SDK가 429 · 5xx · 접속 실패를 간격을 늘려 다시 시도한다
+
 # recommendation 보관 기간(4.6). 주 1회 run_weekly가 이보다 오래된 행을 지운다
 RECOMMENDATION_RETENTION_DAYS = 30
 
