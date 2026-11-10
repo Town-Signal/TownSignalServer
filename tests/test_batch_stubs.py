@@ -1,29 +1,7 @@
-"""다른 팀원이 구현할 배치 작업의 골격.
-
-인터페이스만 있고 본문은 NotImplementedError(명세 4.6 · 4.8 · 6.2 ~ 6.6).
-"""
+"""배치 모듈이 학습 라이브러리 없이 import되는지 확인한다(기본 CI는 배치 의존성을 설치하지 않는다)."""
 
 import subprocess
 import sys
-
-import pytest
-
-from batch.jobs import build_summary_cache
-
-STUBS = [
-    (build_summary_cache.select_targets, (None,)),
-    (build_summary_cache.build_prompt, ({},)),
-    (build_summary_cache.request_summaries, ([],)),
-    (build_summary_cache.upsert_summaries, (None, [])),
-    (build_summary_cache.main, ()),
-]
-
-
-@pytest.mark.parametrize(("func", "args"), STUBS, ids=lambda x: getattr(x, "__qualname__", ""))
-def test_stub_raises_not_implemented(func, args):
-    assert func.__doc__  # 입력 · 출력 · 명세 절을 적은 docstring이 있다
-    with pytest.raises(NotImplementedError):
-        func(*args)
 
 
 def test_batch_modules_import_without_training_libraries():
