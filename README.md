@@ -55,6 +55,7 @@ uvicorn api.main:app --reload                                             # http
 - 5432 포트를 다른 PostgreSQL이 쓰고 있으면 db가 뜨지 않는다. Docker 없이 PostgreSQL 16을 직접 설치해도 되고, 같은 `DATABASE_URL`로 붙는다.
 - `load_dev_fixtures`는 `APP_ENV=local`이고 DB가 로컬일 때만 돌고, 표를 비운 뒤 더미를 넣는다.
 - 초기화: `docker compose down -v` 후 schema.sql부터 다시.
+- 이미 만든 DB는 `db/migrations/`의 파일을 날짜순으로 한 번씩 적용한다(예: `psql -h localhost -U townsignal -d townsignal -v ON_ERROR_STOP=1 -f db/migrations/2026-11-07_support_program_benefit_types.sql`). 운영 DB에는 배포 전에 적용한다.
 
 ## 실데이터로 로컬 DB 채우기 · 모델 만들기
 
@@ -79,7 +80,12 @@ pg_restore -h localhost -U <슈퍼유저> -d townsignal --data-only --disable-tr
 # 3) 확인 — 기대값: 구 25 · 동 425 · 업종 100 · 인허가 약 82만
 psql -h localhost -U townsignal -d townsignal -c \
   "SELECT (SELECT count(*) FROM district) 구, (SELECT count(*) FROM dong) 동, (SELECT count(*) FROM industry) 업종, (SELECT count(*) FROM business_license) 인허가;"
+
+# 4) 지원사업 seed(data/seed의 initial_support_programs.json · support_programs_*.json) 넣기 — 다시 돌려도 중복 없이 seed 값으로 갱신
+python -m batch.jobs.load_support_seed
 ```
+
+- 주의: 4) 뒤에 `load_dev_fixtures`를 `--force`로 다시 돌리면 seed 지원사업도 같이 지워진다(그때는 4)를 다시 실행한다).
 
 | 로컬 DB | 슈퍼유저 | 명령 앞에 붙일 것 |
 | --- | --- | --- |

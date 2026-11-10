@@ -44,3 +44,8 @@ RECOMMENDATION_RETENTION_DAYS = 30
 PASSED_OK = "통과"
 PASSED_EXCLUDED = "제외"
 PASSED_UNKNOWN = "확인불가"
+
+# 지원 형태 (support_program.benefit_types, 2026-11-07 팀 결정). 가용예산에는 현금(amount_max > 0)만 더하고,
+# 금액이 0인 공고는 ②의 자치구별 other_supports 목록으로만 보여 준다. 값은 schema.sql CHECK와 같다
+BENEFIT_CASH = "현금"
+BENEFIT_TYPES = (BENEFIT_CASH, "공간", "교육·멘토링", "투자·판로·네트워크", "융자", "기타")

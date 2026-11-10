@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from datetime import date
 
-from sqlalchemy import Row, func, or_, select
+from sqlalchemy import Row, case, func, select
 from sqlalchemy.orm import Session
 
 from api.models import District, DistrictRent, Industry, SupportProgram
@@ -30,22 +30,28 @@ def get_verified_program(session: Session, program_id: int) -> Row | None:
 
 
 def list_upcoming(session: Session, today: date, limit: int) -> tuple[Sequence[Row], int]:
-    """검수 공고 중 마감 전(apply_end ≥ 오늘) 또는 상시(NULL). apply_end 오름차순 · NULL 맨 뒤 · program_id.
+    """검수 공고 중 현금 지원(amount_max > 0)이고 마감일이 있는 것. 마감된 공고도 넣는다.
 
+    순서: 모집 중(apply_end ≥ 오늘) 마감 가까운 순 → 마감 공고 최근 마감 순 → program_id.
     (rows, limit으로 자르기 전 전체 개수)
     """
-    open_programs = (
+    programs = (
         select(SupportProgram, District.name.label("district_name"))
         .outerjoin(District, District.district_code == SupportProgram.district_code)
         .where(
             SupportProgram.verified_by.is_not(None),
-            or_(SupportProgram.apply_end.is_(None), SupportProgram.apply_end >= today),
+            SupportProgram.amount_max > 0,
+            SupportProgram.apply_end.is_not(None),
         )
     )
-    total = session.scalar(select(func.count()).select_from(open_programs.subquery())) or 0
+    is_open = SupportProgram.apply_end >= today
+    total = session.scalar(select(func.count()).select_from(programs.subquery())) or 0
     rows = session.execute(
-        open_programs.order_by(
-            SupportProgram.apply_end.asc().nulls_last(), SupportProgram.program_id
+        programs.order_by(
+            case((is_open, 0), else_=1),
+            case((is_open, SupportProgram.apply_end)).asc().nulls_last(),  # 모집 중: 마감 가까운 순
+            SupportProgram.apply_end.desc(),  # 마감: 최근 마감 순
+            SupportProgram.program_id,
         ).limit(limit)
     ).all()
     return rows, total

@@ -137,7 +137,10 @@ CREATE TABLE support_program (
   eligibility   JSONB        NOT NULL,
   source_url    VARCHAR(500),
   raw_text      TEXT,                                -- 공고 원문. 검증 대조용
-  extracted_at  TIMESTAMPTZ,  verified_by VARCHAR(40)
+  extracted_at  TIMESTAMPTZ,  verified_by VARCHAR(40),
+  benefit_types TEXT[]       NOT NULL DEFAULT '{}',  -- 지원 형태. 금액 0 공고는 ②에서 목록으로만(예산 미반영)
+  CONSTRAINT chk_program_benefit_types CHECK (benefit_types <@ ARRAY['현금','공간','교육·멘토링',
+                                  '투자·판로·네트워크','융자','기타']::TEXT[])
 );
 CREATE INDEX idx_program_district ON support_program (district_code);
 CREATE INDEX idx_program_deadline ON support_program (apply_end);

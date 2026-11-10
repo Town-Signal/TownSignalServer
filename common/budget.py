@@ -1,6 +1,8 @@
 """자치구별 지원사업 매칭 · 가용예산 · 추정 임대비용 · passed (전체 명세 7.4 · 7.5).
 
 가용예산은 하나다: available_budget = capital + support_fund_max.
+support_fund_max에는 현금 지원(amount_max > 0)만 더한다. 금액이 0인 공고(공간 · 교육 등)는 예산 · 중복 수혜
+계산에서 빼고 자치구별 목록으로만 보여 준다(2026-11-07 팀 결정, split_cash · eligible_in_district).
 보수/기대 예산과 지원 유형(보조금 · 융자 · 현물) 구분은 두지 않는다(13장 판정 2 · 3).
 모든 금액은 원 단위 정수이고 반올림은 사사오입이다(가정).
 """
@@ -78,11 +80,23 @@ def select_programs(eligible: Iterable[Program]) -> DistrictMatch:
     )
 
 
+def split_cash(programs: Iterable[Program]) -> tuple[list[Program], list[Program]]:
+    """(현금 지원 amount_max > 0, 금액 0 공고). 금액 0 공고는 예산에 더하지 않는다."""
+    programs = list(programs)
+    return [p for p in programs if p.amount_max > 0], [p for p in programs if p.amount_max <= 0]
+
+
+def eligible_in_district(
+    programs: Iterable[Program], applicant: Applicant, district_code: str
+) -> list[Program]:
+    """한 자치구에서 받을 수 있는 공고: 검수됨 · 전국이거나 그 구 전용 · 자격 조건 통과(7.4)."""
+    applicable = [p for p in programs if is_matchable(p) and applies_to(p, district_code)]
+    return [p for p in applicable if evaluate(p.eligibility, applicant)]
+
+
 def match_district(programs: Iterable[Program], applicant: Applicant, district_code: str) -> DistrictMatch:
     """한 자치구의 매칭 결과. 25개 구마다 따로 부른다(구 전용 사업 때문에 구마다 다르다)."""
-    applicable = [p for p in programs if is_matchable(p) and applies_to(p, district_code)]
-    eligible = [p for p in applicable if evaluate(p.eligibility, applicant)]
-    return select_programs(eligible)
+    return select_programs(eligible_in_district(programs, applicant, district_code))
 
 
 def available_budget(capital: int, support_fund_max: int) -> int:

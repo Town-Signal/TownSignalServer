@@ -28,7 +28,7 @@ def upcoming(
     today: Annotated[date, Depends(get_today)],
     limit: Annotated[int | None, Query(ge=1, le=program_service.UPCOMING_MAX)] = None,
 ):
-    """① 마감임박 공고. 마감 전 · 상시 공고, 마감일 오름차순(상시는 맨 뒤)."""
+    """① 지원사업 일정. 검수 · 현금 지원 · 마감일 있는 공고. 모집 중(마감 가까운 순) → 마감(최근 순)."""
     return ok(program_service.upcoming(session, today, limit))
 
 

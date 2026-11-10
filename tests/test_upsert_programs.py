@@ -57,6 +57,12 @@ def test_insert_new_program(conn):
     )
     assert row["eligibility"] == ELIG and row["is_exclusive"] is False and row["district_code"] is None
     assert row["extracted_at"] is not None and row["verified_by"] is None
+    assert row["benefit_types"] == []  # 지원 형태는 사람이 seed에서 채운다
+
+
+def test_input_benefit_types_are_ignored(conn):
+    upsert_programs(conn, [program(benefit_types=["현금"])])
+    assert rows(conn)[0]["benefit_types"] == []
 
 
 def test_existing_url_is_left_untouched(conn):
