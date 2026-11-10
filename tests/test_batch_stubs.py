@@ -5,18 +5,12 @@
 
 import subprocess
 import sys
-from datetime import datetime
 
 import pytest
 
 from batch.jobs import build_summary_cache
-from batch.llm import client as llm_client
 
 STUBS = [
-    (llm_client.ensure_ready, ()),
-    (llm_client.generate_json, ("프롬프트", {})),
-    (llm_client.submit_batch, ([], {})),
-    (llm_client.fetch_batch_results, (datetime(2026, 1, 1),)),
     (build_summary_cache.select_targets, (None,)),
     (build_summary_cache.build_prompt, ({},)),
     (build_summary_cache.request_summaries, ([],)),

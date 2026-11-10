@@ -5,7 +5,7 @@
 cron(가정): 매주 월요일 03:00 KST.
 
 단계(각각 독립 실행, 단계마다 성공 · 실패와 행 수를 로그로 남기고 하나라도 실패하면 종료 코드 1)
-1. 지원사업 수집 · 구조화 — build_support_program.main()(지원사업 담당이 구현 중, 지금은 미구현 실패로 기록)
+1. 지원사업 수집 · 구조화 — build_support_program.main()(LLM_API_KEY가 없으면 실패로 기록)
 2. 생성 후 30일이 지난 recommendation 삭제(rec_item은 CASCADE)
 3. support_program · program_verification 백업 — pg_dump 명령과 지울 옛 백업 목록을 조립해 로그로 남긴다
    (실행은 아직 안 함, 배치 이미지에 postgresql-client 추가 후 연결)
