@@ -28,6 +28,7 @@ import re
 import sqlite3
 from collections import Counter
 from datetime import UTC, date, datetime
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from uuid import uuid4
 
@@ -43,7 +44,12 @@ from batch.pipeline.raw_conversion import SOURCE_ROW, fingerprint
 from batch.pipeline.raw_sources import SERVER_ROOT
 
 logger = logging.getLogger(__name__)
-DB_COLUMNS = ["license_id", "dong_code", "industry_code", "open_date", "close_date", "status"]
+CORE_COLUMNS = ["license_id", "dong_code", "industry_code", "open_date", "close_date", "status"]
+# 원천에서 그대로 옮기는 칼럼(모델 B 학습용). 같은 인허가의 중복 행 판정(core)에는 쓰지 않는다.
+EXTRA_COLUMNS = ["business_name", "area_sqm", "address", "multi_use"]
+DB_COLUMNS = CORE_COLUMNS + EXTRA_COLUMNS
+AREA_SOURCES = ("소재지면적", "시설면적", "시설총규모")  # 앞에서부터 처음으로 0보다 큰 값
+OPTIONAL = ["사업장명", "다중이용업소여부", *AREA_SOURCES]  # 업종마다 있는 칼럼이 다르다
 SOURCE_CRS = 5174
 REQUIRED = [
     "개방자치단체코드",
@@ -88,6 +94,37 @@ def stable_id(kind: str, authority: str, management: str) -> tuple[str, str]:
     return hashlib.blake2b(key.encode("utf-8"), digest_size=20, person=b"TownSignalLicV1").hexdigest(), key
 
 
+def area_sqm(value: str | None) -> Decimal | None:
+    """'29.70' · '.00' · '0E-9' · '' 같은 원천 면적 문자열. 0 이하 · 숫자 아님은 None."""
+    try:
+        area = Decimal(normalize(value))
+    except InvalidOperation:
+        return None
+    if not area.is_finite() or area <= 0:
+        return None
+    return round(area, 2)
+
+
+def extra_values(row: dict) -> list:
+    """원천 한 행 → EXTRA_COLUMNS 값. 빈 값은 None으로 두고 대체값을 만들지 않는다.
+
+    사업장명 · 주소는 원문 그대로(앞뒤 공백만 제거) 둔다. normalize(NFKC · 공백 합치기)는 매칭용이라
+    저장 값에 쓰지 않는다(예: 'Ⅱ'가 'II'로 바뀜).
+
+    area_sqm: 소재지면적 → 시설면적(노래방 · PC방) → 시설총규모
+    address: 도로명주소, 없으면 지번주소
+    multi_use: 다중이용업소여부 Y → True, N → False, 그 밖(빈 값 · 칼럼 없는 업종) → None
+    """
+    area = next((a for a in (area_sqm(row.get(c)) for c in AREA_SOURCES) if a is not None), None)
+    address = _raw(row.get("도로명주소")) or _raw(row.get("지번주소"))
+    multi_use = {"Y": True, "N": False}.get(normalize(row.get("다중이용업소여부")).upper())
+    return [_raw(row.get("사업장명")), area, address, multi_use]
+
+
+def _raw(value: str | None) -> str | None:
+    return (value or "").strip() or None
+
+
 def normalized_status(code: str, detail: str) -> str | None:
     direct = {"01": "영업/정상", "02": "휴업", "03": "폐업", "05": "제외등"}
     if code in direct:
@@ -121,6 +158,10 @@ def _schema():
             pa.field("open_date", pa.date32(), nullable=False),
             pa.field("close_date", pa.date32()),
             pa.field("status", pa.string()),
+            pa.field("business_name", pa.string()),
+            pa.field("area_sqm", pa.decimal128(12, 2)),
+            pa.field("address", pa.string()),
+            pa.field("multi_use", pa.bool_()),
         ]
     )
 
@@ -290,7 +331,7 @@ def _transform(files, boundary, masters, coverage, rules, staging, report, batch
                 source_counts = Counter()
                 with pq.ParquetWriter(enriched_path, schema, compression="zstd") as writer:
                     for batch in pf.iter_batches(batch_size=batch_size):
-                        needed = REQUIRED + [field]
+                        needed = REQUIRED + [field] + [c for c in OPTIONAL if c in pf.schema_arrow.names]
                         table = pa.Table.from_batches([batch])
                         rows = table.select(needed).to_pylist()
                         frame = table.select(
@@ -345,7 +386,7 @@ def _transform(files, boundary, masters, coverage, rules, staging, report, batch
                             db_row = dict(
                                 zip(
                                     DB_COLUMNS,
-                                    [lid, dongs[i], industry, opening, closing, status],
+                                    [lid, dongs[i], industry, opening, closing, status, *extra_values(row)],
                                     strict=True,
                                 )
                             )
@@ -354,7 +395,7 @@ def _transform(files, boundary, masters, coverage, rules, staging, report, batch
                                 # 주소/전화번호가 달라도 좌표·업태·상태·개폐업일·최종수정은 같아야 한다.
                                 core = [
                                     identity,
-                                    *list(db_row.values()),
+                                    *[db_row[c] for c in CORE_COLUMNS],
                                     subtype,
                                     *[
                                         normalize(row[c])
@@ -530,7 +571,7 @@ def _transform(files, boundary, masters, coverage, rules, staging, report, batch
 def load_license_table(conn, report, masters):
     """기존 지표/마스터를 변경하지 않는다. 동일한 마스터를 확인하고 인허가만 적재한다."""
     import pyarrow.parquet as pq
-    from sqlalchemy import Date, MetaData, String, text
+    from sqlalchemy import Boolean, Date, MetaData, Numeric, String, text
 
     if conn.dialect.name != "postgresql" or conn.dialect.driver != "psycopg" or not conn.in_transaction():
         raise ValueError("열린 PostgreSQL+psycopg 트랜잭션이 필요합니다")
@@ -546,9 +587,13 @@ def load_license_table(conn, report, masters):
     table = metadata.tables["business_license"]
     if list(table.primary_key.columns.keys()) != ["license_id"]:
         raise ValueError("business_license 기본키 불일치")
+    missing = [c for c in DB_COLUMNS if c not in table.c]
+    if missing:
+        raise ValueError(f"business_license에 칼럼이 없습니다(마이그레이션 먼저 적용): {', '.join(missing)}")
+    types = {"area_sqm": Numeric, "multi_use": Boolean}
     for field in _schema():
         column = table.c[field.name]
-        dtype = Date if field.name.endswith("_date") else String
+        dtype = types.get(field.name) or (Date if field.name.endswith("_date") else String)
         if not isinstance(column.type, dtype) or column.nullable != field.nullable:
             raise ValueError(f"DB 타입/NULL 규칙 불일치: {field.name}")
     mark = report["output"]
