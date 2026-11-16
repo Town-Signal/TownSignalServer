@@ -4,8 +4,20 @@
 """
 
 from datetime import date
+from decimal import Decimal
 
-from sqlalchemy import CHAR, BigInteger, CheckConstraint, Date, ForeignKey, Index, Integer, String
+from sqlalchemy import (
+    CHAR,
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    Date,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.models.base import Base
@@ -80,6 +92,7 @@ class BusinessLicense(Base):
     __tablename__ = "business_license"
     __table_args__ = (
         CheckConstraint("close_date IS NULL OR close_date >= open_date", name="chk_license_dates"),
+        CheckConstraint("area_sqm IS NULL OR area_sqm > 0", name="chk_license_area"),
         Index("idx_license_dong_ind", "dong_code", "industry_code"),
         Index("idx_license_open", "open_date"),
     )
@@ -90,3 +103,8 @@ class BusinessLicense(Base):
     open_date: Mapped[date] = mapped_column(Date)
     close_date: Mapped[date | None] = mapped_column(Date)  # NULL = 아직 영업 중
     status: Mapped[str | None] = mapped_column(String(10))
+    # 점포 단위 칼럼(모델 B). 배치가 채우고 비어 있어도 학습이 돈다 — 분석계획서 B4 · B5 · B9
+    business_name: Mapped[str | None] = mapped_column(String(200))  # 사업장명
+    area_sqm: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))  # 소재지 → 시설 → 시설총규모 순
+    address: Mapped[str | None] = mapped_column(String(300))  # 도로명주소, 없으면 지번주소
+    multi_use: Mapped[bool | None] = mapped_column(Boolean)  # 다중이용업소여부

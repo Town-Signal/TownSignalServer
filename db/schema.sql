@@ -88,12 +88,19 @@ CREATE TABLE business_license (                      -- 인허가 원본 LOCALDA
   open_date     DATE        NOT NULL,                -- 인허가일자
   close_date    DATE,                                -- NULL = 아직 영업 중
   status        VARCHAR(10),
-  CONSTRAINT chk_license_dates CHECK (close_date IS NULL OR close_date >= open_date)
+  business_name VARCHAR(200),                        -- 사업장명. 행사용 한시적 신고 · 팝업 판정(모델 B)
+  area_sqm      NUMERIC(10,2),                       -- 소재지면적 → 시설면적 → 시설총규모 순. 모델 B 피처
+  address       VARCHAR(300),                        -- 도로명주소, 없으면 지번주소. 지하 판정
+  multi_use     BOOLEAN,                             -- 다중이용업소여부
+  CONSTRAINT chk_license_dates CHECK (close_date IS NULL OR close_date >= open_date),
+  CONSTRAINT chk_license_area  CHECK (area_sqm IS NULL OR area_sqm > 0)
 );
 CREATE INDEX idx_license_dong_ind ON business_license (dong_code, industry_code);
 CREATE INDEX idx_license_open     ON business_license (open_date);
 -- close_date가 NULL인 행이 상당수임. 버리고 학습하면 생존기간이 심하게
 -- 짧게 추정됨. 일반 회귀가 아니라 생존분석을 써야 하는 이유.
+-- 점포 칼럼 4개는 모두 NULL 허용이고 채우는 것은 학습 코드가 한다. 빈 면적을 한 값으로
+-- 채워 적재하면 폐업 처리 때 기록이 비는 경향이 미래 정보로 샌다(분석계획서 B4 · B5).
 
 /* =============================================================================
    3. 임대료 테이블 (commercial_market, district_rent)
