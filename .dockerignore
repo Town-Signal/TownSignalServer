@@ -7,6 +7,8 @@ __pycache__
 .ruff_cache
 tests
 notebooks
-data
+data/dev
+data/raw
+data/processed
 docs
 .env
