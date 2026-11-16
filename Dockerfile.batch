@@ -15,6 +15,9 @@ RUN pip install --no-cache-dir -r ${REQUIREMENTS}
 
 COPY common/ common/
 COPY batch/ batch/
+# 배치가 읽는 기준 파일. 이게 없으면 EC2에서 load_support_seed가 'seed 파일이 없다'로 끝나고,
+# 업종 커버리지 표(train_and_predict · survival)도 못 읽는다. 더미(data/dev)는 .dockerignore가 막는다
+COPY data/seed/ data/seed/
 
 ENTRYPOINT ["python", "-m"]
 CMD ["batch.jobs.run_weekly"]
