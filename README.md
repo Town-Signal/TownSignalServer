@@ -48,7 +48,7 @@ docker compose up -d db                                                   # Post
 docker compose exec -T db psql -U townsignal -d townsignal -v ON_ERROR_STOP=1 < db/schema.sql
 python -m batch.jobs.load_dev_fixtures                                    # 더미 데이터(로컬 전용)
 
-uvicorn api.main:app --reload                                             # http://localhost:8000/docs
+uvicorn api.main:app --reload                                             # http://localhost:8000/api/docs
 ```
 
 - 로컬 DB는 각자 PC에 따로 생긴다. 접속 정보는 `.env.example`의 `DATABASE_URL` 그대로(`townsignal` / `townsignal`, 5432).

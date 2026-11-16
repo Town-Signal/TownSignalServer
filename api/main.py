@@ -15,7 +15,19 @@ from api.routers import admin, certificates, health, programs, recommendations, 
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="TownSignal API", version="0.1.0")
+    # 라우터가 각자 /api prefix를 들고 있고 Vercel rewrites는 /api/*만 EC2로 넘기므로(명세 12.1)
+    # 문서도 /api 아래에 둔다. 운영에서 https://town-signal.vercel.app/api/docs로 열린다 —
+    # vercel.json · 프론트는 그대로고, EC2 :8000을 http로 직접 열 필요가 없어진다
+    app = FastAPI(
+        title="TownSignal API",
+        version="0.1.0",
+        docs_url="/api/docs",
+        redoc_url="/api/redoc",
+        openapi_url="/api/openapi.json",
+        # 이 값은 docs_url을 따라오지 않아 따로 옮긴다. 안 옮기면 /docs/oauth2-redirect 한 줄이
+        # /api 밖에 남아 운영에서 닿지 않는다(이 API는 OAuth2를 쓰지 않아 동작에는 영향 없음)
+        swagger_ui_oauth2_redirect_url="/api/docs/oauth2-redirect",
+    )
 
     # 나중에 추가한 미들웨어가 바깥쪽이다. request_id는 CORS 처리 응답에도 붙도록 가장 바깥에 둔다
     app.add_middleware(
