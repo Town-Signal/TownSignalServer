@@ -14,8 +14,9 @@
 | **로컬 전용** 더미 데이터 적재 | `python -m batch.jobs.load_dev_fixtures` | 필요할 때 · 로컬 | 로컬 DB 15개 표 전체 ([data/dev](../data/dev/README.md)) | 백엔드 · 구현 |
 
 - **골격만**인 작업은 함수 시그니처와 docstring(입력 · 출력 · 적재 표 · 명세 절)만 있고 본문은 `NotImplementedError`다. 담당 팀원이 본문을 채운다.
-- 지원사업 작업은 기업마당 수집 · 구조화 · 적재까지 구현돼 있고, LLM 호출(`batch/llm/client.py`)만 아직 연결 전이다.
-  지금 실행하면 수집을 시작하기 전에 `NotImplementedError`로 끝난다. `PUBLIC_DATA_API_KEY`가 필요하다.
+- 지원사업 작업은 기업마당 수집 · 구조화 · 적재까지 구현돼 있고, LLM 호출(`batch/llm/client.py`)은 Anthropic Claude API
+  (`claude-opus-5-5` · Batch API)로 연결돼 있다. `PUBLIC_DATA_API_KEY`와 `LLM_API_KEY`(Anthropic 키)가 필요하고,
+  `LLM_API_KEY`가 비어 있으면 수집을 시작하기 전에 `LLMError`로 끝난다.
 - `load_dev_fixtures`는 실제 데이터가 아닌 더미를 넣는다. 환경변수 `APP_ENV=local`이 명시돼 있고 DB가 로컬일 때만 돈다.
 - 운영 작업(run_weekly · build_support_program · train_and_predict · build_summary_cache)에는 APP_ENV 가드를 두지 않는다.
   run_weekly는 운영 EC2에서 도는 것이 정상이고(명세 12.3에서 APP_ENV는 batch에 주입하지 않음),
@@ -26,7 +27,7 @@
 cron(가정: 매주 월요일 03:00 KST)이 배치 이미지로 실행한다. 단계를 각각 독립 실행하고 단계마다 성공 · 실패와 행 수를 로그로 남기며,
 하나라도 실패하면 종료 코드 1이다. **학습 · 예측 · 요약은 실행하지 않는다.**
 
-1. 지원사업 수집 · 구조화 — `build_support_program.main()` (LLM 연결 전에는 '미구현 실패'로 기록되고 다음 단계는 계속)
+1. 지원사업 수집 · 구조화 — `build_support_program.main()` (LLM_API_KEY가 없으면 실패로 기록되고 다음 단계는 계속)
 2. 생성 후 30일이 지난 recommendation 삭제 — `batch.pipeline.cleanup.delete_expired_recommendations` (30일 **초과**, rec_item은 CASCADE)
 3. support_program · program_verification 백업 — `batch.pipeline.backup`이 pg_dump 명령(비밀번호는 PGPASSWORD 환경변수)과
    지울 옛 백업(최근 4개 유지)을 조립해 로그로 남긴다. **아직 실행하지 않는다** — 배치 이미지에 postgresql-client를 넣은 뒤 연결한다.
