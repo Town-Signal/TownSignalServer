@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 
 from pydantic import StringConstraints
 
-from common.constants import INDUSTRY_CATEGORIES
+from common.constants import BENEFIT_TYPES, INDUSTRY_CATEGORIES
 
 Passed = Literal["통과", "제외", "확인불가"]
 RentConfidence = Literal["높음", "낮음", "없음"]
@@ -18,3 +18,5 @@ Certificate = Annotated[str, StringConstraints(strip_whitespace=True, min_length
 DistrictCode = Annotated[str, StringConstraints(pattern=r"^\d{5}$")]
 # 업종 대분류 3종. 값은 common.constants.INDUSTRY_CATEGORIES와 같다
 IndustryCategory = Literal[INDUSTRY_CATEGORIES]
+# 지원 형태(support_program.benefit_types). 값은 common.constants.BENEFIT_TYPES와 같다
+BenefitType = Literal[BENEFIT_TYPES]

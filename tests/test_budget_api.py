@@ -6,6 +6,7 @@
 - 공통 BAD_REQUEST · DB_UNAVAILABLE · METHOD_NOT_ALLOWED
 """
 
+import json
 import uuid
 
 import pytest
@@ -382,3 +383,109 @@ def test_budget_method_not_allowed(api_client):
     # 그래서 다른 경로와 겹치지 않는 PUT · DELETE로 405를 확인한다
     failure(api_client.put(URL, json=BASE), 405, "METHOD_NOT_ALLOWED")
     failure(api_client.delete(URL), 405, "METHOD_NOT_ALLOWED")
+
+
+# ── 이 구의 다른 지원(other_supports, 2026-11-07) ──────────────
+# 금액 0 공고는 예산 · 중복 수혜에서 빠지고 자격을 통과한 구의 other_supports에만 나온다
+
+
+def add_zero_program(
+    conn,
+    name,
+    *,
+    district=None,
+    verified="검수자",
+    exclusive=False,
+    eligibility=None,
+    benefit_types=("공간", "교육·멘토링"),
+) -> int:
+    return conn.execute(
+        text(
+            "INSERT INTO support_program (name, agency, amount_max, district_code, is_exclusive, "
+            "eligibility, source_url, verified_by, benefit_types) "
+            "VALUES (:name, '시험 기관', 0, :district, :exclusive, CAST(:elig AS jsonb), :url, :verified, "
+            "CAST(:types AS text[])) RETURNING program_id"
+        ),
+        {
+            "name": name,
+            "district": district,
+            "exclusive": exclusive,
+            "elig": json.dumps(eligibility or {"and": []}),
+            "url": f"https://example.test/other/{name}",
+            "verified": verified,
+            "types": list(benefit_types),
+        },
+    ).scalar_one()
+
+
+def budget_view(body: dict) -> dict:
+    keys = (
+        "support_fund_max", "available_budget", "budget_margin", "passed", "matched_programs",
+        "excluded_programs",
+    )
+    return {code: {k: row[k] for k in keys} for code, row in by_district(body).items()}
+
+
+def test_budget_other_supports_empty_by_default(api_client):
+    for row in calc(api_client)["data"]["district_budgets"]:
+        assert row["other_supports"] == []
+
+
+def test_budget_zero_amount_program_does_not_change_budget(api_client, dummy_db):
+    before = budget_view(calc(api_client))
+    nationwide = add_zero_program(dummy_db, "서울 창업 공간", exclusive=True)  # 배타여도 중복 수혜와 무관
+
+    body = calc(api_client)
+
+    assert budget_view(body) == before
+    for row in body["data"]["district_budgets"]:
+        assert program_ids(row["other_supports"]) == [nationwide]
+    assert by_district(body)[GWANAK]["other_supports"][0] == {
+        "program_id": nationwide,
+        "name": "서울 창업 공간",
+        "agency": "시험 기관",
+        "benefit_types": ["공간", "교육·멘토링"],
+        "district_code": None,
+        "source_url": "https://example.test/other/서울 창업 공간",
+    }
+
+
+def test_budget_district_only_other_support_and_order(api_client, dummy_db):
+    nationwide = add_zero_program(dummy_db, "가 서울 멘토링", benefit_types=["교육·멘토링"])
+    gwanak_b = add_zero_program(dummy_db, "하 관악 공간", district=GWANAK, benefit_types=["공간"])
+    gwanak_a = add_zero_program(
+        dummy_db, "나 관악 판로", district=GWANAK, benefit_types=["투자·판로·네트워크"]
+    )
+
+    rows = by_district(calc(api_client))
+
+    # 구 전용 먼저(이름 가나다순), 그다음 서울 전체 · 전국
+    assert program_ids(rows[GWANAK]["other_supports"]) == [gwanak_a, gwanak_b, nationwide]
+    for code, row in rows.items():
+        if code != GWANAK:
+            assert program_ids(row["other_supports"]) == [nationwide], code
+
+
+def test_budget_unverified_other_support_not_shown(api_client, dummy_db):
+    add_zero_program(dummy_db, "미검수 공간", verified=None)
+    for row in calc(api_client)["data"]["district_budgets"]:
+        assert row["other_supports"] == []
+
+
+def test_budget_ineligible_other_support_not_shown(api_client, dummy_db):
+    add_zero_program(
+        dummy_db, "중장년 멘토링", eligibility={"and": [{"field": "age", "op": ">=", "value": 40}]}
+    )
+    assert all(row["other_supports"] == [] for row in calc(api_client)["data"]["district_budgets"])
+    rows = calc(api_client, age=45)["data"]["district_budgets"]
+    assert all(len(row["other_supports"]) == 1 for row in rows)
+
+
+def test_budget_other_supports_saved_in_snapshot(api_client, dummy_db):
+    program_id = add_zero_program(dummy_db, "서울 창업 공간")
+    body = calc(api_client)
+    saved = dummy_db.execute(
+        text("SELECT calculated_budgets FROM recommendation WHERE rec_id = :id"),
+        {"id": body["data"]["rec_id"]},
+    ).scalar_one()
+    assert all(program_ids(d["other_supports"]) == [program_id] for d in saved["district_budgets"])

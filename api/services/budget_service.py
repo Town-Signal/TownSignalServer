@@ -19,9 +19,18 @@ from api.schemas.program import (
     DistrictBudgetResult,
     ExcludedProgram,
     MatchedProgram,
+    OtherSupport,
 )
 from api.schemas.region import BudgetSummary
-from common.budget import available_budget, judge, match_district, rent_cost, select_programs
+from common.budget import (
+    available_budget,
+    eligible_in_district,
+    judge,
+    match_district,
+    rent_cost,
+    select_programs,
+    split_cash,
+)
 from common.certificate_normalizer import Mapper, normalize
 from common.constants import DEPOSIT_MULTIPLIER_DEFAULT, PASSED_EXCLUDED, PASSED_OK, PASSED_UNKNOWN
 from common.evaluator import Applicant, Program
@@ -52,15 +61,35 @@ def _to_program(row) -> Program:
     )
 
 
-def _load_programs(session: Session) -> tuple[list[Program], bool]:
-    """검수 공고를 읽는다. 조회가 실패하면 지원금 없이 계속한다 → (빈 목록, degraded=True)(7.4)."""
+def _to_other_support(row) -> OtherSupport:
+    return OtherSupport(
+        program_id=row.program_id,
+        name=row.name,
+        agency=row.agency,
+        benefit_types=list(row.benefit_types),
+        district_code=row.district_code,
+        source_url=row.source_url,
+    )
+
+
+def _load_programs(session: Session) -> tuple[list[Program], dict[int, OtherSupport], bool]:
+    """검수 공고를 읽는다. 조회가 실패하면 지원금 없이 계속한다 → (빈 목록, {}, degraded=True)(7.4).
+
+    두 번째 값은 금액 0 공고의 표시용 DTO(program_id → OtherSupport)다. 판정은 Program으로 한다.
+    """
     try:
         with session.begin_nested():  # 실패해도 이 SAVEPOINT만 되돌리고 recommendation 저장은 계속한다
             rows = program_repo.list_matchable_programs(session)
+            others = {row.program_id: _to_other_support(row) for row in rows if row.amount_max <= 0}
     except SQLAlchemyError:
         logger.exception("지원사업 조회 실패 — 지원금 0으로 계산(degraded)")
-        return [], True
-    return [_to_program(row) for row in rows], False
+        return [], {}, True
+    return [_to_program(row) for row in rows], others, False
+
+
+def _other_sort_key(p: Program) -> tuple:
+    # TODO(가정): 구 전용 먼저, 그다음 이름 가나다순(같으면 program_id)
+    return (p.district_code is None, p.name, p.program_id)
 
 
 def calculate(
@@ -86,7 +115,9 @@ def calculate(
             )
         )
 
-    programs, degraded = _load_programs(session)
+    programs, other_dtos, degraded = _load_programs(session)
+    # 가용예산 · 중복 수혜는 현금 지원만으로 계산하고, 금액 0 공고는 other_supports로만 보여 준다(2026-11-07)
+    cash_programs, other_programs = split_cash(programs)
     if degraded:
         warnings.append(_notice("SUPPORT_PROGRAM_UNAVAILABLE"))
 
@@ -105,11 +136,12 @@ def calculate(
     for d in districts:  # 25개 구마다 따로 매칭한다(구 전용 사업 때문에 구마다 다르다, 7.4)
         reason = None
         try:
-            match = match_district(programs, applicant, d.district_code)
+            match = match_district(cash_programs, applicant, d.district_code)
+            others = eligible_in_district(other_programs, applicant, d.district_code)
         except Exception:
-            # TODO(가정): 한 구만 계산에 실패하면 그 구만 지원금 0, 임대료 판정은 그대로 한다
+            # TODO(가정): 한 구만 계산에 실패하면 그 구만 지원금 0 · 다른 지원 없음, 임대료 판정은 그대로
             logger.exception("자치구 지원사업 계산 실패: %s", d.district_code)
-            match, reason, partial_error = select_programs([]), "SUPPORT_DATA_ERROR", True
+            match, others, reason, partial_error = select_programs([]), [], "SUPPORT_DATA_ERROR", True
 
         available = available_budget(req.capital, match.support_fund_max)
         multiplier = d.deposit_multiplier or DEPOSIT_MULTIPLIER_DEFAULT
@@ -153,6 +185,7 @@ def calculate(
                 rent_per_sqm=None if d.rent_per_sqm is None else float(d.rent_per_sqm),
                 geo_code=d.geo_code,
                 unavailable_reason=reason,
+                other_supports=[other_dtos[p.program_id] for p in sorted(others, key=_other_sort_key)],
             )
         )
     if partial_error:

@@ -7,11 +7,13 @@ from common.budget import (
     RentCost,
     available_budget,
     district_code_of,
+    eligible_in_district,
     format_manwon,
     judge,
     match_district,
     rent_cost,
     select_programs,
+    split_cash,
 )
 from common.evaluator import Applicant, Program
 
@@ -122,3 +124,30 @@ def test_format_manwon():
 
 def test_district_code_is_first_five_digits():
     assert district_code_of("11620655") == "11620"
+
+
+# ── 금액 0 공고(2026-11-07): 예산에서 빼고 목록으로만 ─────────────
+
+
+def test_split_cash():
+    cash, zero = program(1, 5_000_000), program(2, 0)
+    assert split_cash([cash, zero]) == ([cash], [zero])
+    assert split_cash([]) == ([], [])
+
+
+def test_eligible_in_district_rules():
+    nationwide = program(1, 0)
+    gwanak_only = program(2, 0, district=GWANAK)
+    unverified = program(3, 0, verified=None)
+    too_old = program(4, 0, eligibility={"field": "age", "op": ">=", "value": 40})
+    programs = [nationwide, gwanak_only, unverified, too_old]
+    assert eligible_in_district(programs, YOUTH, GWANAK) == [nationwide, gwanak_only]
+    assert eligible_in_district(programs, YOUTH, GANGNAM) == [nationwide]
+
+
+def test_zero_programs_left_out_keep_support_fund():
+    cash = [program(1, 20_000_000, exclusive=True), program(2, 3_000_000)]
+    zero = [program(3, 0, exclusive=True), program(4, 0)]
+    with_zero, _ = split_cash(cash + zero)
+    assert match_district(with_zero, YOUTH, GWANAK) == match_district(cash, YOUTH, GWANAK)
+    assert match_district(with_zero, YOUTH, GWANAK).support_fund_max == 23_000_000

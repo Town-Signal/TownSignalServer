@@ -22,7 +22,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.models.base import VIEW_METADATA, Base
@@ -32,6 +32,10 @@ class SupportProgram(Base):
     __tablename__ = "support_program"
     __table_args__ = (
         CheckConstraint("amount_max >= 0", name="support_program_amount_max_check"),
+        CheckConstraint(
+            "benefit_types <@ ARRAY['현금','공간','교육·멘토링','투자·판로·네트워크','융자','기타']::TEXT[]",
+            name="chk_program_benefit_types",
+        ),
         Index("idx_program_district", "district_code"),
         Index("idx_program_deadline", "apply_end"),
         Index("idx_program_elig", "eligibility", postgresql_using="gin"),
@@ -52,6 +56,8 @@ class SupportProgram(Base):
     raw_text: Mapped[str | None] = mapped_column(Text)
     extracted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     verified_by: Mapped[str | None] = mapped_column(String(40))  # NULL이면 매칭에 쓰지 않는다
+    # 지원 형태(common.constants.BENEFIT_TYPES). 금액 0 공고는 ②에서 other_supports로만 보여 준다
+    benefit_types: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'"))
 
 
 class ProgramVerification(Base):

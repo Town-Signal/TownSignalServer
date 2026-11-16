@@ -12,6 +12,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import CheckConstraint, UniqueConstraint, delete, select, text
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.exc import IntegrityError
 
 from api.models import (
     VIEW_METADATA,
@@ -294,6 +295,7 @@ def test_round_trip_programs_and_view(db_session):
     got = s.get(SupportProgram, program_id)
     assert got.eligibility == ELIGIBILITY
     assert (got.is_exclusive, got.verified_by) == (False, None)
+    assert got.benefit_types == []  # DB 기본값
     assert got.district_code == GU
     row = s.execute(
         select(v_extraction_accuracy).where(v_extraction_accuracy.c.field_name == VERIFY_FIELD)
@@ -359,3 +361,20 @@ def test_round_trip_recommendation_uuid_and_cascade(db_session):
     s.execute(delete(Recommendation).where(Recommendation.rec_id == rec_id))
     s.commit()
     assert s.scalar(select(RecItem).where(RecItem.rec_id == rec_id)) is None  # ON DELETE CASCADE
+
+
+def test_program_benefit_types_round_trip_and_check(db_session):
+    s = db_session
+    _seed_masters(s)
+    program = SupportProgram(
+        name="공간 사업", amount_max=0, eligibility=ELIGIBILITY, benefit_types=["공간", "교육·멘토링"]
+    )
+    s.add(program)
+    s.commit()
+    program_id = program.program_id
+    s.expunge_all()
+    assert s.get(SupportProgram, program_id).benefit_types == ["공간", "교육·멘토링"]
+
+    s.add(SupportProgram(name="틀린 형태", amount_max=0, eligibility=ELIGIBILITY, benefit_types=["대출"]))
+    with pytest.raises(IntegrityError, match="chk_program_benefit_types"):
+        s.flush()

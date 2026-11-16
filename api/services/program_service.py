@@ -1,4 +1,4 @@
-"""③ 지원사업 공고 상세 · ① 마감임박 공고 (전체 명세 8.2)."""
+"""③ 지원사업 공고 상세 · ① 지원사업 일정 (전체 명세 8.2)."""
 
 from datetime import date
 from typing import Any
@@ -12,6 +12,7 @@ from api.schemas.program import ProgramDetail, UpcomingProgram
 
 UPCOMING_MAX = 50  # limit을 생략하면 최대 50건(판정 28, 가정)
 NATIONAL = "전국"
+STATUS_OPEN, STATUS_CLOSED = "모집 중", "마감"
 
 
 def _common_fields(program, district_name: str | None) -> dict[str, Any]:
@@ -24,7 +25,6 @@ def _common_fields(program, district_name: str | None) -> dict[str, Any]:
         "district_name": district_name or NATIONAL,
         "apply_start": program.apply_start,
         "apply_end": program.apply_end,
-        "always_open": program.apply_end is None,
         "source_url": program.source_url,
     }
 
@@ -36,6 +36,7 @@ def detail(session: Session, program_id: int) -> ProgramDetail:
     program = row.SupportProgram
     return ProgramDetail(
         **_common_fields(program, row.district_name),
+        always_open=program.apply_end is None,
         is_exclusive=program.is_exclusive,
         eligibility=program.eligibility,
         raw_text=program.raw_text,
@@ -43,7 +44,16 @@ def detail(session: Session, program_id: int) -> ProgramDetail:
 
 
 def upcoming(session: Session, today: date, limit: int | None) -> ListData[UpcomingProgram]:
-    """TODO(가정): 마감일 당일까지 포함(apply_end ≥ 오늘). total은 limit으로 자르기 전 개수."""
+    """검수 · 현금 지원(amount_max > 0) · 마감일 있는 공고. 마감 공고도 넣고 status로 구분한다(2026-11-07).
+
+    TODO(가정): 마감일 당일까지 "모집 중"(apply_end ≥ 오늘). total은 limit으로 자르기 전 개수.
+    """
     rows, total = repo.list_upcoming(session, today, limit or UPCOMING_MAX)
-    items = [UpcomingProgram(**_common_fields(row.SupportProgram, row.district_name)) for row in rows]
+    items = [
+        UpcomingProgram(
+            **_common_fields(row.SupportProgram, row.district_name),
+            status=STATUS_OPEN if row.SupportProgram.apply_end >= today else STATUS_CLOSED,
+        )
+        for row in rows
+    ]
     return ListData(items=items, total=total)
