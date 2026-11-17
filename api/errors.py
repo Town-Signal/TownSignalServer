@@ -94,6 +94,11 @@ FIELD_MESSAGES: dict[tuple[str, ErrorReason], str] = {
         ("target_area_sqm", r): "희망 면적은 0㎡보다 크고 1,000㎡ 이하로 입력해 주세요."
         for r in ("INVALID_TYPE", "OUT_OF_RANGE")
     },
+    **{
+        ("residence_district_code", r): "거주 구를 다시 선택해 주세요."
+        for r in ("INVALID_TYPE", "INVALID_FORMAT")
+    },
+    ("residence_district_code", "UNKNOWN_CODE"): "없는 자치구예요. 거주 구를 다시 선택해 주세요.",
     ("certificates", "TOO_MANY"): "자격증은 20개까지 넣을 수 있어요.",
     ("certificates.*", "TOO_SHORT"): "자격증 이름을 입력해 주세요.",
     ("certificates.*", "TOO_LONG"): "자격증 이름은 50자 이하로 입력해 주세요.",

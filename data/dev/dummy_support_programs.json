@@ -146,6 +146,19 @@
       "apply_end": "2026-12-15",
       "eligibility": {"and": [{"field": "age", "op": ">=", "value": 40}]},
       "verified_by": "더미검수자"
+    },
+    {
+      "key": "dongjak_residence",
+      "case": "구 전용(동작구) 비배타 사업 — 동작구 거주자만(거주 구 입력 확인용). 거주 구를 안 고르면 매칭되지 않는다. 기간이 없어 ① 일정에는 나오지 않는다",
+      "name": "[더미] 동작구 거주 청년 창업 지원",
+      "agency": "더미 기관(동작구청)",
+      "amount_max": 5000000,
+      "district_code": "11590",
+      "is_exclusive": false,
+      "apply_start": null,
+      "apply_end": null,
+      "eligibility": {"and": [{"field": "residence_district_code", "op": "==", "value": "11590"}]},
+      "verified_by": "더미검수자"
     }
   ],
   "verifications": [

@@ -489,3 +489,66 @@ def test_budget_other_supports_saved_in_snapshot(api_client, dummy_db):
         {"id": body["data"]["rec_id"]},
     ).scalar_one()
     assert all(program_ids(d["other_supports"]) == [program_id] for d in saved["district_budgets"])
+
+
+# ── 거주 구(residence_district_code, 2026-11-17) ───────────────
+# 더미: 동작구 전용 · 비배타 500만, 동작구 거주자만
+
+DONGJAK = "11590"
+
+
+def test_budget_without_residence_is_unchanged(api_client):
+    """거주 구를 안 넣으면(생략 · null) 결과가 같고, 거주 조건 사업은 어느 구에도 나오지 않는다."""
+    omitted = calc(api_client)
+    explicit_null = calc(api_client, residence_district_code=None)
+    assert budget_view(omitted) == budget_view(explicit_null)
+    rows = by_district(omitted)
+    assert rows[DONGJAK]["support_fund_max"] == rows[JONGNO]["support_fund_max"] == 24_000_000
+    for row in rows.values():
+        names = [p["name"] for p in row["matched_programs"] + row["excluded_programs"]]
+        assert "[더미] 동작구 거주 청년 창업 지원" not in names
+
+
+def test_budget_residence_raises_only_that_district(api_client):
+    before = budget_view(calc(api_client))
+    after = budget_view(calc(api_client, residence_district_code=DONGJAK))
+    assert after[DONGJAK]["support_fund_max"] == before[DONGJAK]["support_fund_max"] + 5_000_000
+    assert after[DONGJAK]["available_budget"] == before[DONGJAK]["available_budget"] + 5_000_000
+    assert "[더미] 동작구 거주 청년 창업 지원" in [p["name"] for p in after[DONGJAK]["matched_programs"]]
+    after.pop(DONGJAK), before.pop(DONGJAK)
+    assert after == before  # 나머지 24개 구는 그대로
+
+
+def test_budget_residence_in_other_district_changes_nothing(api_client):
+    assert budget_view(calc(api_client, residence_district_code=DOBONG)) == budget_view(calc(api_client))
+
+
+def test_budget_residence_saved_in_input_condition(api_client, dummy_db):
+    rec_id = calc(api_client, residence_district_code=DONGJAK)["data"]["rec_id"]
+    saved = dummy_db.scalar(
+        text("SELECT input_condition FROM recommendation WHERE rec_id = :id"), {"id": rec_id}
+    )
+    assert saved["residence_district_code"] == DONGJAK
+
+
+@pytest.mark.parametrize("bad", ["1132", "113200", "도봉구", "1132a"])
+def test_budget_residence_format(api_client, bad):
+    error = single_error(post(api_client, residence_district_code=bad))
+    assert (error["field"], error["reason"]) == ("residence_district_code", "INVALID_FORMAT")
+
+
+def test_budget_residence_unknown(api_client, dummy_db):
+    before = dummy_db.scalar(text("SELECT count(*) FROM recommendation"))
+    error = single_error(post(api_client, residence_district_code="99999"))
+    assert (error["field"], error["reason"]) == ("residence_district_code", "UNKNOWN_CODE")
+    assert error["rejected_value"] == "99999"
+    assert dummy_db.scalar(text("SELECT count(*) FROM recommendation")) == before  # 저장하지 않는다
+
+
+def test_budget_unknown_industry_and_residence_both_reported(api_client):
+    response = post(api_client, industry_code="CS999999", residence_district_code="99999")
+    body = failure(response, 422, "VALIDATION_ERROR")
+    assert [(e["field"], e["reason"]) for e in body["errors"]] == [
+        ("industry_code", "UNKNOWN_CODE"),
+        ("residence_district_code", "UNKNOWN_CODE"),
+    ]

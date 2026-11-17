@@ -73,7 +73,7 @@ def test_load_twice_gives_same_result(db_session):
     assert {name: second[name] for name in EXPECTED_COUNTS} == EXPECTED_COUNTS
     assert second["business_license"] == second["recommendation"] == second["rec_item"] == 0
     ids = conn.execute(text("SELECT program_id FROM support_program ORDER BY program_id")).scalars().all()
-    assert ids == list(range(1, 12))
+    assert ids == list(range(1, 13))
 
 
 def test_load_clears_local_recommendations(db_session):

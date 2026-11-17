@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from api.errors import MESSAGES, AppError, field_error
 from api.repositories import program_repository as program_repo
 from api.repositories import recommendation_repository as rec_repo
+from api.repositories import region_repository as region_repo
 from api.schemas.common import Notice
 from api.schemas.program import (
     BudgetCalculationRequest,
@@ -96,13 +97,15 @@ def calculate(
     session: Session, req: BudgetCalculationRequest, mapper: Mapper | None
 ) -> tuple[BudgetCalculationResponse, list[Notice]]:
     industry = program_repo.get_industry(session, req.industry_code)
-    if industry is None:  # 본문 안의 코드가 마스터에 없으면 UNKNOWN_CODE(8.1.1)
-        raise AppError(
-            "VALIDATION_ERROR",
-            422,
-            MESSAGES["VALIDATION_ERROR"],
-            [field_error("industry_code", "UNKNOWN_CODE", req.industry_code)],
-        )
+    # 본문 안의 코드가 마스터에 없으면 UNKNOWN_CODE(8.1.1)
+    unknown = []
+    if industry is None:
+        unknown.append(field_error("industry_code", "UNKNOWN_CODE", req.industry_code))
+    residence = req.residence_district_code
+    if residence is not None and not region_repo.district_exists(session, residence):
+        unknown.append(field_error("residence_district_code", "UNKNOWN_CODE", residence))
+    if unknown:
+        raise AppError("VALIDATION_ERROR", 422, MESSAGES["VALIDATION_ERROR"], unknown)
 
     warnings: list[Notice] = []
     certificates = normalize(req.certificates, mapper)
@@ -128,6 +131,7 @@ def calculate(
         certificates=certificates.certificates,
         industry_code=req.industry_code,
         industry_category=industry.category,
+        residence_district_code=residence,
     )
 
     districts = program_repo.list_districts_with_rent(session)
