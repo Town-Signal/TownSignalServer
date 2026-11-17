@@ -314,6 +314,27 @@ def test_snapshot_before_execute_has_no_items(api_client):
     assert datetime.fromisoformat(data["created_at"]).tzinfo is not None
 
 
+def test_snapshot_restores_residence_district(api_client, dummy_db):
+    """거주 구(2026-11-17)는 input_condition에서 그대로 돌아온다. 안 고르면 null, 옛 스냅샷은 키가 없다."""
+    chosen = budgets(api_client, residence_district_code="11590")["rec_id"]
+    data = success(api_client.get(f"{URL}/{chosen}"))["data"]
+    assert data["input_condition"]["residence_district_code"] == "11590"
+
+    not_chosen = budgets(api_client)["rec_id"]
+    data = success(api_client.get(f"{URL}/{not_chosen}"))["data"]
+    assert data["input_condition"]["residence_district_code"] is None
+
+    dummy_db.execute(
+        text(
+            "UPDATE recommendation SET input_condition = input_condition - 'residence_district_code' "
+            "WHERE rec_id = :id"
+        ),
+        {"id": not_chosen},
+    )
+    data = success(api_client.get(f"{URL}/{not_chosen}"))["data"]
+    assert "residence_district_code" not in data["input_condition"]
+
+
 def test_snapshot_reads_old_snapshot_without_other_supports(api_client, dummy_db):
     """other_supports(2026-11-07)가 없던 옛 스냅샷도 그대로 읽고 빈 목록으로 내린다."""
     rec_id = budgets(api_client)["rec_id"]

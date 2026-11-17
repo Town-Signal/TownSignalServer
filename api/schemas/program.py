@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from api.schemas.region import BudgetSummary
-from api.schemas.types import BenefitType, Certificate, IndustryCode, Passed, RentConfidence
+from api.schemas.types import BenefitType, Certificate, DistrictCode, IndustryCode, Passed, RentConfidence
 from common.constants import (
     AGE_MAX,
     AGE_MIN,
@@ -28,6 +28,8 @@ class BudgetCalculationRequest(BaseModel):
     career_years: int = Field(0, ge=0, description="동종업계 경력(년)")
     certificates: list[Certificate] = Field(default_factory=list, max_length=CERTIFICATES_MAX_COUNT)
     target_area_sqm: float = Field(DEFAULT_AREA_SQM, gt=0, le=AREA_MAX_SQM, description="희망 면적(㎡)")
+    # 2026-11-17 추가(명세 v2.5 예정). 지원사업 거주 조건 판정에만 쓴다
+    residence_district_code: DistrictCode | None = Field(None, description="거주 자치구 코드 5자리(선택)")
 
 
 class MatchedProgram(BaseModel):
