@@ -49,9 +49,12 @@ _QUERIES = {
     ),
     "rent": "SELECT district_code, rent_per_sqm FROM district_rent",
     # 모델 B — 행정동 · 업종 매핑 성공 점포 전체. 2021년 이전 개업도 인허가 이력 피처와 학습 후보에 쓴다(6.3)
+    # 점포 칼럼(business_name · area_sqm · address · multi_use)은 모델 B의 점포 피처와
+    # 행사용 한시적 신고 제외에 쓴다. 적재 전이라 전부 NULL이어도 학습은 그대로 돈다
     "licenses": (
-        "SELECT dong_code, industry_code, open_date, close_date FROM business_license "
-        "WHERE dong_code IS NOT NULL AND industry_code IS NOT NULL"
+        "SELECT dong_code, industry_code, open_date, close_date, "
+        "business_name, area_sqm, address, multi_use FROM business_license "
+        "WHERE dong_code IS NOT NULL AND industry_code IS NOT NULL ORDER BY license_id"
     ),
 }
 

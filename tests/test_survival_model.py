@@ -310,3 +310,166 @@ def test_prob_metrics_uses_full_cohort_only():
     df = pd.DataFrame(rows).assign(obs_end=end, industry_code="CS100001")
     out = survival.prob_metrics(df, np.log(np.full(3, 20.0)), "normal", 1.0, 12)
     assert out["rows"] == 2 and out["actual_survival"] == pytest.approx(0.5)
+
+
+# ---------- 점포 피처 · 행사용 한시적 신고 제외 (분석계획서 B5 · B6 · B9) ----------
+STORE_ROWS = [
+    # 상호, 면적, 주소, 다중이용업소
+    ("카페큐브(한시적)", 12.0, "중구 1", False),
+    ("○○팝업스토어", 9.0, "중구 2", False),
+    ("김밥천국 중구점", 40.0, "중구 3 지하1층", True),
+    ("김밥천국 종로점", None, "종로구 4", None),
+    (None, 25.0, "", False),
+]
+
+
+def licenses_with_store(**overrides) -> "pd.DataFrame":
+    """점포 칼럼이 든 인허가. 앞 두 건은 행사용 한시적 신고 · 팝업이다."""
+    rows = []
+    for i, (name, area, address, multi) in enumerate(STORE_ROWS):
+        rows.append(
+            {
+                "dong_code": "11110515",
+                "industry_code": "CS100001",
+                "open_date": date(2022, 1, 1) + timedelta(days=30 * i),
+                "close_date": None,
+                "business_name": name,
+                "area_sqm": area,
+                "address": address,
+                "multi_use": multi,
+                **overrides,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def test_drop_temporary_removes_event_stores_only():
+    kept = survival.drop_temporary(licenses_with_store())
+    names = [n for n in kept["business_name"]]
+    assert "카페큐브(한시적)" not in names and "○○팝업스토어" not in names
+    assert "김밥천국 중구점" in names and None in names  # 일반 점포 · 상호 없는 점포는 남는다
+
+
+def test_drop_temporary_is_noop_without_business_name():
+    raw = licenses_with_store().drop(columns="business_name")
+    assert len(survival.drop_temporary(raw)) == len(raw)
+
+
+def test_fill_area_draws_from_real_values_not_one_number():
+    area = pd.Series([10.0, 20.0, 30.0, None, None, None, None])
+    industry = pd.Series(["CS100001"] * 7)
+
+    filled = survival.fill_area(area, industry)
+
+    assert filled.notna().all()
+    assert set(filled[3:]) <= {10.0, 20.0, 30.0}  # 실제 있는 값 중에서만 뽑는다
+    assert filled[3:].nunique() > 1  # 한 값으로 몰리면 그 값이 곧 '폐업' 표시가 된다(B5a 누수)
+    assert filled.tolist() == survival.fill_area(area, industry).tolist()  # 시드 고정
+
+
+def test_fill_area_keeps_missing_when_industry_has_no_values():
+    area = pd.Series([None, None, 50.0])
+    industry = pd.Series(["CS200001", "CS200001", "CS100001"])
+
+    filled = survival.fill_area(area, industry)
+
+    assert filled.isna().tolist() == [True, True, False]
+
+
+def test_fill_area_treats_zero_and_negative_as_missing():
+    filled = survival.fill_area(pd.Series([0.0, -3.0, 20.0]), pd.Series(["CS100001"] * 3))
+    assert filled.tolist() == [20.0, 20.0, 20.0]
+
+
+def test_brand_prior_counts_only_earlier_openings():
+    lic = licenses_with_store()
+    queries = pd.DataFrame(
+        {
+            "brand_key": ["김밥천국", "김밥천국", ""],
+            "industry_code": ["CS100001"] * 3,
+            "ref": [pd.Timestamp("2022-01-01"), pd.Timestamp("2025-01-01"), pd.Timestamp("2025-01-01")],
+        }
+    )
+
+    out = survival.brand_prior(lic, queries)
+
+    assert out[0] == 0  # 첫 점포가 열리기 전
+    assert out[1] == 2  # 중구점 · 종로점 둘 다 이전에 열렸다
+    assert np.isnan(out[2])  # 상호를 모르면 '처음 여는 브랜드'로 치지 않는다
+
+
+def test_store_features_reads_all_four_columns():
+    lic = survival.drop_temporary(licenses_with_store())
+    out = survival.store_features(lic.reset_index(drop=True), lic)
+
+    assert list(out.columns) == survival.STORE
+    assert out["log_area"].isna().tolist() == [False, True, False]  # 채움은 시간 분할 뒤에만 한다
+    assert out["is_basement"].tolist()[:2] == [1.0, 0.0]  # 지하1층 · 지상
+    assert np.isnan(out["is_basement"].tolist()[2])  # 주소가 비면 모른다
+    assert out["is_multi_use"].tolist()[0] == 1.0
+
+
+def test_store_features_all_missing_without_store_columns():
+    lic = licenses_with_store().drop(columns=survival.STORE_COLUMNS)
+
+    out = survival.store_features(lic, lic)
+
+    assert out.isna().all().all()  # 칼럼이 없으면 이 피처를 쓰지 않던 모델과 같다
+
+
+def test_store_columns_survive_label_frame():
+    out = survival.label_frame(licenses_with_store(), obs_end=date(2025, 12, 31), start=None)
+    assert all(c in out.columns for c in survival.STORE_COLUMNS)
+
+
+def test_predict_next_uses_reference_store_values(model, panel, licenses):
+    captured = {}
+    real = survival._mu
+
+    def spy(booster, df):
+        captured["df"] = df
+        return real(booster, df)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(survival, "_mu", spy)
+        survival.predict_next(model, panel, licenses)
+
+    df = captured["df"]
+    assert df["log_area"].eq(np.log1p(survival.REFERENCE_AREA_SQM)).all()
+    assert df["log_brand_prior"].eq(0.0).all() and df["is_basement"].eq(0.0).all()
+    assert df["is_multi_use"].eq(0.0).all()
+
+
+def test_fill_area_never_samples_validation_or_test_values():
+    train = pd.DataFrame({"area_sqm": [10.0, 20.0], "industry_code": ["A", "A"]})
+    held_out = pd.DataFrame({"area_sqm": [999.0, None, None], "industry_code": ["A", "A", "B"]})
+    out = survival.fill_store_area(held_out, train)
+    assert out["log_area"].iloc[0] == pytest.approx(np.log1p(999))
+    assert out["log_area"].iloc[1] in np.log1p([10.0, 20.0])
+    assert np.isnan(out["log_area"].iloc[2])  # 새 업종에 평가 구간 값으로 풀을 만들지 않는다
+    assert held_out["area_sqm"].isna().sum() == 2  # 원천/입력을 변경하지 않는다
+
+
+def test_drop_temporary_matches_b9_english_popup_rule():
+    lic = licenses_with_store()
+    lic.loc[2, "business_name"] = "Summer POP-UP"
+    assert "Summer POP-UP" not in survival.drop_temporary(lic)["business_name"].tolist()
+
+
+def test_brand_prior_keeps_industries_separate_and_normalizes_names():
+    lic = pd.DataFrame(
+        {
+            "industry_code": ["A", "B", "A"],
+            "business_name": ["Ｃａｆｅ! 강남점", "Cafe 강남점", "Cafe 종로점"],
+            "open_date": pd.to_datetime(["2020-01-01", "2019-01-01", "2022-01-01"]),
+        }
+    )
+    q = pd.DataFrame({"industry_code": ["A"], "brand_key": ["Cafe"], "ref": pd.to_datetime(["2021-01-01"])})
+    assert survival.brand_prior(lic, q).tolist() == [1.0]
+    assert survival.brand_key(pd.Series(["Ｃａｆｅ! 강남점", "가", None])).tolist() == ["Cafe", "", ""]
+
+
+def test_basement_recognizes_source_address_variants():
+    lic = licenses_with_store().iloc[:3].copy()
+    lic["address"] = ["주소 B1", "주소 비1층", "주소 지층"]
+    assert survival.store_features(lic, lic)["is_basement"].tolist() == [1.0, 1.0, 1.0]

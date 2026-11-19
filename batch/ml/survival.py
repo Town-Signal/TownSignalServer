@@ -11,6 +11,12 @@
     (q − 1) 값이라 점포 자신이 섞이지 않는다(변수정의서 4.2). 2021년 이전 개업은 상권 지표가 없어 결측
   - 인허가 이력(HISTORY): 개업일 이전 기록만으로 만든 같은 행정동 · 업종의 경쟁 진입 · 영업 점포 수 ·
     과거 1년 내 폐업률. 상권 지표가 없는 2021년 이전 개업에도 값이 있다
+  - 점포(STORE): business_license의 점포 칼럼에서 만든 면적 · 프랜차이즈 · 지하 · 다중이용업소.
+    피처가 전부 행정동 × 업종 단위면 같은 칸의 점포끼리 구분하지 못한다(분석계획서 8장 ③).
+    칼럼이 없거나 비어 있으면 전부 결측이라 이 피처를 쓰지 않던 모델과 같게 돈다
+- 제외: 행사용 한시적 신고 · 팝업은 학습 · 평가 · 인허가 이력에서 모두 뺀다(분석계획서 B9).
+  상호로만 판정해 개업 시점에 알 수 있는 정보만 쓴다. 1년 안에 99% 닫혀 C를 부풀리는데
+  서비스가 답하려는 '지금 일반 점포를 연다면'과는 다른 모집단이다
 - 학습 시작: 2021년 이후 개업만 쓰는 안과 TRAIN_START_EARLY 이후 개업까지 쓰는 안을
   같은 검증 로그우도로 고른다.
   오래 관측된 점포가 들어가야 5년 넘는 생존기간을 외삽 없이 배운다.
@@ -26,6 +32,7 @@
 
 import csv
 import math
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -35,6 +42,7 @@ import numpy as np
 import pandas as pd
 
 from batch.ml import sales
+from common.constants import DEFAULT_AREA_SQM
 
 QUANTILES = (0.1, 0.5, 0.9)
 START_DATE = date(2021, 1, 1)  # 상권 지표가 있는 개업 시작일
@@ -61,7 +69,18 @@ HISTORY = [
     "hist_cohort_n",  # 위 비율의 분모
     "gu_fail1y_rate",  # 같은 비율을 자치구 · 업종 단위로(행정동 표본이 적을 때 보완)
 ]
-NUMERIC = [*sales.NUMERIC, *HISTORY]
+# 점포 단위 피처 — business_license의 점포 칼럼(2026-11-16 마이그레이션)에서 만든다
+STORE_COLUMNS = ["business_name", "area_sqm", "address", "multi_use"]
+STORE = [
+    "log_area",  # log1p(점포 면적 ㎡). 빈 값은 같은 업종의 실제 면적 중 무작위로 채운다
+    "log_brand_prior",  # log1p(개업일 이전에 문 연 같은 상호 점포 수) — 프랜차이즈 대용
+    "is_basement",  # 주소가 지하
+    "is_multi_use",  # 다중이용업소
+]
+REFERENCE_AREA_SQM = DEFAULT_AREA_SQM  # 전 조합 예측('지금 개업하는 점포')의 면적 — 화면 기본 희망 면적
+# 행사용 한시적 신고 · 팝업으로 보는 상호 낱말. '행사' · '부스'는 '은행사거리'처럼 오탐이 많아 뺐다
+TEMPORARY_KEYWORDS = ("한시", "팝업", "축제", "페스티벌", "박람회", "주민자치", "먹거리장터")
+NUMERIC = [*sales.NUMERIC, *HISTORY, *STORE]
 FEATURES = [*sales.CATEGORICAL, *NUMERIC]
 
 PARAMS: dict[str, Any] = {
@@ -149,6 +168,7 @@ def label_frame(
     df["open_year"] = df["open_date"].dt.year
     df["qidx"] = df["open_date"].dt.year * 4 + (df["open_date"].dt.month - 1) // 3
     columns = [*sales.KEYS, "open_date", "obs_end", "duration_months", "event", "open_year", "qidx"]
+    columns += [c for c in STORE_COLUMNS if c in df]  # 있을 때만 — 점포 피처는 없으면 결측으로 간다
     out = df[columns].reset_index(drop=True)
     out.attrs["obs_end"] = label
     return out
@@ -218,6 +238,159 @@ def history_features(all_licenses: pd.DataFrame, queries: pd.DataFrame) -> pd.Da
     return q.drop(columns="district_code")
 
 
+# ---------- 행사용 한시적 신고 · 팝업 제외 ----------
+def drop_temporary(licenses: pd.DataFrame) -> pd.DataFrame:
+    """상호에 행사 · 팝업 낱말이 든 인허가를 뺀다(분석계획서 B9). business_name이 없으면 그대로 둔다.
+
+    개업 시점에 알 수 있는 정보(상호)로만 판정한다 — 영업 기간으로 거르면 결과를 보고 표본을 고르는 셈이다.
+    """
+    if "business_name" not in licenses:
+        return licenses
+    name = licenses["business_name"].astype("string").fillna("")
+    hit = name.str.contains("|".join(TEMPORARY_KEYWORDS) + r"|pop[\s-]?up", case=False, regex=True, na=False)
+    return licenses[~hit.to_numpy()]
+
+
+# ---------- 점포 피처 ----------
+def _groups(keys: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """같은 값끼리 묶은 (고유값, 시작, 끝, 정렬 순서). 순서가 정해져 있어 같은 입력이면 결과가 같다."""
+    order = np.argsort(keys, kind="stable")
+    sorted_keys = keys[order]
+    uniq = np.unique(sorted_keys)
+    lo = np.searchsorted(sorted_keys, uniq, "left")
+    hi = np.searchsorted(sorted_keys, uniq, "right")
+    return uniq, lo, hi, order
+
+
+def fill_area(
+    area: pd.Series,
+    industry: pd.Series,
+    seed: int = SEED,
+    *,
+    reference_area: pd.Series | None = None,
+    reference_industry: pd.Series | None = None,
+) -> pd.Series:
+    """0 이하 · 빈 면적을 같은 업종의 실제 면적 중 무작위로 채운다(시드 고정).
+
+    한 값(업종 중앙값 등)으로 채우면 누수다 — 면적이 빈 비율이 영업 중 0.4% · 폐업 17.4%라
+    그 한 값이 곧 '폐업' 표시가 된다(분석계획서 B4 · 기각한 B5a). 업종에 실제 값이 하나도
+    없으면 결측으로 둔다. 학습/평가에서는 reference_*에 학습 구간만 전달한다.
+    독립적인 변환 호출은 reference_* 생략 시 입력 자체를 표본 풀로 쓴다.
+    """
+    values = pd.to_numeric(area, errors="coerce").to_numpy(dtype="float64")
+    values = np.where(np.isfinite(values) & (values > 0), values, np.nan)
+    out = values.copy()
+    rng = np.random.default_rng(seed)
+    if (reference_area is None) != (reference_industry is None):
+        raise ValueError("면적 표본 풀의 값과 업종을 함께 지정해야 합니다")
+    ref_area = area if reference_area is None else reference_area
+    ref_industry = industry if reference_industry is None else reference_industry
+    ref_values = pd.to_numeric(ref_area, errors="coerce").to_numpy(dtype="float64")
+    ref_values = np.where(np.isfinite(ref_values) & (ref_values > 0), ref_values, np.nan)
+    keys, ref_lo, ref_hi, ref_order = _groups(ref_industry.astype(str).to_numpy())
+    pools = {}
+    for key, a, b in zip(keys, ref_lo, ref_hi, strict=True):
+        pool = ref_values[ref_order[a:b]]
+        pools[key] = pool[~np.isnan(pool)]
+    uniq, lo, hi, order = _groups(industry.astype(str).to_numpy())
+    for key, a, b in zip(uniq, lo, hi, strict=True):
+        idx = order[a:b]
+        pool = pools.get(key, np.array([]))
+        missing = idx[np.isnan(values[idx])]
+        if len(pool) and len(missing):
+            out[missing] = rng.choice(pool, size=len(missing))
+    return pd.Series(out, index=area.index)
+
+
+def brand_key(names: pd.Series) -> pd.Series:
+    """상호의 첫 낱말 — 가맹 브랜드 대용(B6). 상호가 없으면 빈 문자열이라 서로 묶지 않는다.
+
+    TODO(가정): '카페' · '치킨' 같은 일반 낱말도 한 브랜드로 묶인다. 가맹 브랜드 목록이 생기면 바꾼다.
+    """
+    normalized = names.astype("string").fillna("").map(lambda s: unicodedata.normalize("NFKC", s))
+    first = normalized.str.strip().str.split().str[0].fillna("")
+    first = first.str.replace(r"[^\w가-힣]", "", regex=True)
+    return first.where(first.str.len() >= 2, "").astype(str)
+
+
+def brand_prior(all_licenses: pd.DataFrame, queries: pd.DataFrame) -> np.ndarray:
+    """queries(industry_code · brand_key · ref)마다 같은 업종·상호의 이전 점포 수(B6)."""
+    if "business_name" not in all_licenses:
+        return np.full(len(queries), np.nan)
+    lic = all_licenses.dropna(subset=["open_date"])
+    brand = brand_key(lic["business_name"]).to_numpy()
+    keys = np.where(brand != "", lic["industry_code"].astype(str).to_numpy() + "|" + brand, "")
+    opened = _days(lic["open_date"])
+    uniq, lo, hi, order = _groups(keys)
+    table = {k: np.sort(opened[order[a:b]]) for k, a, b in zip(uniq, lo, hi, strict=True) if k}
+
+    ref = _days(queries["ref"])
+    qbrand = queries["brand_key"].to_numpy()
+    qkeys = np.where(qbrand != "", queries["industry_code"].astype(str).to_numpy() + "|" + qbrand, "")
+    out = np.full(len(queries), np.nan)
+    quniq, qlo, qhi, qorder = _groups(qkeys)
+    for k, a, b in zip(quniq, qlo, qhi, strict=True):
+        if not k:
+            continue  # 상호를 모르는 점포 — 0으로 두면 '처음 여는 브랜드'라고 잘못 알려 준다
+        idx = qorder[a:b]
+        arr = table.get(k)
+        out[idx] = 0.0 if arr is None else np.searchsorted(arr, ref[idx], "left")
+    return out
+
+
+def store_features(labels: pd.DataFrame, all_licenses: pd.DataFrame) -> pd.DataFrame:
+    """labels에 STORE 칼럼을 붙여 돌려준다. 원천 칼럼이 없으면 그 피처는 전부 결측이다."""
+    out = pd.DataFrame(index=labels.index)
+    if "area_sqm" in labels:
+        # 채움은 시간 분할 후 학습 구간으로만 한다. 여기서 전체 레이블을 표본 풀로 쓰면
+        # 검증/테스트 면적의 분포가 학습 피처로 들어간다.
+        area = pd.to_numeric(labels["area_sqm"], errors="coerce")
+        out["log_area"] = np.log1p(area.where(np.isfinite(area) & (area > 0)))
+    else:
+        out["log_area"] = np.nan
+    if "business_name" in labels:
+        queries = pd.DataFrame(
+            {
+                "brand_key": brand_key(labels["business_name"]).to_numpy(),
+                "industry_code": labels["industry_code"].astype(str).to_numpy(),
+                "ref": labels["open_date"].to_numpy(),
+            }
+        )
+        out["log_brand_prior"] = np.log1p(brand_prior(all_licenses, queries))
+    else:
+        out["log_brand_prior"] = np.nan
+    if "address" in labels:
+        address = labels["address"].astype("string").fillna("")
+        found = address.str.contains(r"지하|지층|\bB\d|비\d층", case=False, regex=True, na=False)
+        out["is_basement"] = np.where(address.str.len() > 0, found.astype(float), np.nan)
+    else:
+        out["is_basement"] = np.nan
+    if "multi_use" in labels:
+        # 원천은 Y · N, DB는 boolean이다. 둘 다 받고 모르는 값은 결측으로 둔다
+        mapped = labels["multi_use"].map({True: 1.0, False: 0.0, "Y": 1.0, "N": 0.0})
+        out["is_multi_use"] = pd.to_numeric(mapped, errors="coerce")
+    else:
+        out["is_multi_use"] = np.nan
+    return out
+
+
+def fill_store_area(frame: pd.DataFrame, reference: pd.DataFrame) -> pd.DataFrame:
+    """학습 구간의 실제 면적만으로 결측을 채운다. 원천 면적 칼럼은 보존한다."""
+    if "area_sqm" not in frame:
+        return frame
+    out = frame.copy()
+    out["log_area"] = np.log1p(
+        fill_area(
+            frame["area_sqm"],
+            frame["industry_code"],
+            seed=SEED,
+            reference_area=reference["area_sqm"],
+            reference_industry=reference["industry_code"],
+        )
+    )
+    return out
+
+
 # ---------- 피처 ----------
 def _key_frame(panel: pd.DataFrame) -> pd.DataFrame:
     out = panel[[*sales.KEYS, "qidx", *sales.NUMERIC]].copy()
@@ -236,6 +409,9 @@ def attach_features(labels: pd.DataFrame, panel: pd.DataFrame, all_licenses: pd.
     hist = history_features(all_licenses, df[[*sales.KEYS]].assign(ref=df["open_date"]))
     for c in HISTORY:
         df[c] = hist[c].to_numpy()
+    store = store_features(df, all_licenses)
+    for c in STORE:
+        df[c] = store[c].to_numpy()
     return _with_categories(df, panel)
 
 
@@ -473,31 +649,47 @@ def train(
 
     licenses는 기간 제한 없는 전체 인허가(인허가 이력 피처에 2021년 이전 기록도 쓴다).
     분포 · 폭은 첫 번째 학습 시작(2021년)으로 고르고, 그 조합으로 나머지 학습 시작을 비교한다.
+    행사용 한시적 신고 · 팝업은 학습 · 평가 · 인허가 이력에서 한 번에 뺀다(B9).
     """
+    licenses = drop_temporary(licenses)
     everything = label_frame(licenses, obs_end, start=min(starts))
     if covered is None:
         covered = covered_industries(
             everything[everything["open_date"] >= pd.Timestamp(START_DATE)], min_stores
         )
     data = attach_features(everything[everything["industry_code"].isin(covered)], panel, licenses)
-    va = data[data["open_year"] == VALID_YEAR]
-    te = data[data["open_year"] > VALID_YEAR]
+    va_raw = data[data["open_year"] == VALID_YEAR]
+    te_raw = data[data["open_year"] > VALID_YEAR]
 
     def train_part(start: date) -> pd.DataFrame:
         return data[(data["open_year"] <= TRAIN_LAST_YEAR) & (data["open_date"] >= pd.Timestamp(start))]
 
-    tr0 = train_part(starts[0])
-    if min(len(tr0), len(va), len(te)) == 0:
-        sizes = f"학습 {len(tr0)} · 검증 {len(va)} · 테스트 {len(te)}"
+    tr0_raw = train_part(starts[0])
+    if min(len(tr0_raw), len(va_raw), len(te_raw)) == 0:
+        sizes = f"학습 {len(tr0_raw)} · 검증 {len(va_raw)} · 테스트 {len(te_raw)}"
         raise ValueError(f"개업 연도 분할에 빈 구간이 있다({sizes})")
+    tr0 = fill_store_area(tr0_raw, tr0_raw)
+    va0 = fill_store_area(va_raw, tr0_raw)
 
-    search = [_search_one(tr0, va, d, s, starts[0]) for d in DISTRIBUTIONS for s in SCALES]
+    search = [_search_one(tr0, va0, d, s, starts[0]) for d in DISTRIBUTIONS for s in SCALES]
     first = min(search, key=lambda s: s["valid_nloglik"])
     for start in starts[1:]:
-        search.append(_search_one(train_part(start), va, first["distribution"], first["scale"], start))
+        reference = train_part(start)
+        search.append(
+            _search_one(
+                fill_store_area(reference, reference),
+                fill_store_area(va_raw, reference),
+                first["distribution"],
+                first["scale"],
+                start,
+            )
+        )
     best = min(search, key=lambda s: s["valid_nloglik"])
     start = date.fromisoformat(best["train_start"])
-    tr = train_part(start)
+    reference = train_part(start)
+    tr = fill_store_area(reference, reference)
+    va = fill_store_area(va_raw, reference)
+    te = fill_store_area(te_raw, reference)
 
     mu_test = _mu(best["booster"], te)
     metrics: dict[str, Any] = {
@@ -522,6 +714,7 @@ def train(
             "scale": best["scale"],
             "rounds": best["rounds"],
         },
+        "area_imputation": {"reference_split": "train", "reference_rows": len(reference), "seed": SEED},
         "test": evaluate(te, mu_test, best["distribution"], best["scale"]),
         # 테스트(2024년 이후 개업)는 3년이 안 지나 3년 생존 확률은 검증 코호트(2023년 개업)로 본다.
         # 검증은 분포 · 폭 선택에 쓰였으므로 약간 낙관적인 값이다
@@ -533,6 +726,8 @@ def train(
         metrics["baselines_test"] = _baselines(tr, te)
 
     full = data[data["open_date"] >= pd.Timestamp(start)]
+    # 모델 선택과 테스트 평가가 끝난 뒤의 운영 모델은 전 기간으로 다시 학습한다.
+    full = fill_store_area(full, full)
     final = _fit(full, None, best["distribution"], best["scale"], best["rounds"])
     return SurvivalModel(final, best["distribution"], best["scale"], covered, obs_end, metrics)
 
@@ -545,6 +740,7 @@ def predict_next(model: SurvivalModel, panel: pd.DataFrame, licenses: pd.DataFra
     """
     columns = [*sales.KEYS, "survival_p10", "survival_p50", "survival_p90"]
     columns += [f"survival_prob_{h}m" for h in PROB_HORIZONS]
+    licenses = drop_temporary(licenses)
     future = _key_frame(panel[panel["is_future"]])
     future = future[future["industry_code"].isin(model.covered)].reset_index(drop=True)
     if future.empty:
@@ -558,6 +754,12 @@ def predict_next(model: SurvivalModel, panel: pd.DataFrame, licenses: pd.DataFra
     )
     for c in HISTORY:
         future[c] = hist[c].to_numpy()
+    # '지금 개업하는 일반 점포' 기준값 — 화면 기본 희망 면적 · 독립 점포 · 지상 · 다중이용업소 아님.
+    # 예측표가 행정동 × 업종이라 점포 값을 하나로 고정한다. 희망 면적별 확률은 스키마 · API가 바뀌는 일이다
+    future["log_area"] = math.log1p(REFERENCE_AREA_SQM)
+    future["log_brand_prior"] = math.log1p(0)
+    future["is_basement"] = 0.0
+    future["is_multi_use"] = 0.0
     df = _with_categories(future, panel)
     mu = _mu(model.booster, df)
     months = quantile_months(mu, model.distribution, model.scale)
