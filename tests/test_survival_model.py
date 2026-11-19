@@ -402,7 +402,7 @@ def test_store_features_reads_all_four_columns():
     out = survival.store_features(lic.reset_index(drop=True), lic)
 
     assert list(out.columns) == survival.STORE
-    assert out["log_area"].notna().all()  # 빈 면적도 같은 업종 값으로 채워진다
+    assert out["log_area"].isna().tolist() == [False, True, False]  # 채움은 시간 분할 뒤에만 한다
     assert out["is_basement"].tolist()[:2] == [1.0, 0.0]  # 지하1층 · 지상
     assert np.isnan(out["is_basement"].tolist()[2])  # 주소가 비면 모른다
     assert out["is_multi_use"].tolist()[0] == 1.0
@@ -437,3 +437,19 @@ def test_predict_next_uses_reference_store_values(model, panel, licenses):
     assert df["log_area"].eq(np.log1p(survival.REFERENCE_AREA_SQM)).all()
     assert df["log_brand_prior"].eq(0.0).all() and df["is_basement"].eq(0.0).all()
     assert df["is_multi_use"].eq(0.0).all()
+
+
+def test_fill_area_never_samples_validation_or_test_values():
+    train = pd.DataFrame({"area_sqm": [10.0, 20.0], "industry_code": ["A", "A"]})
+    held_out = pd.DataFrame({"area_sqm": [999.0, None, None], "industry_code": ["A", "A", "B"]})
+    out = survival.fill_store_area(held_out, train)
+    assert out["log_area"].iloc[0] == pytest.approx(np.log1p(999))
+    assert out["log_area"].iloc[1] in np.log1p([10.0, 20.0])
+    assert np.isnan(out["log_area"].iloc[2])  # 새 업종에 평가 구간 값으로 풀을 만들지 않는다
+    assert held_out["area_sqm"].isna().sum() == 2  # 원천/입력을 변경하지 않는다
+
+
+def test_drop_temporary_matches_b9_english_popup_rule():
+    lic = licenses_with_store()
+    lic.loc[2, "business_name"] = "Summer POP-UP"
+    assert "Summer POP-UP" not in survival.drop_temporary(lic)["business_name"].tolist()

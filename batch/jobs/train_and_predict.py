@@ -54,7 +54,7 @@ _QUERIES = {
     "licenses": (
         "SELECT dong_code, industry_code, open_date, close_date, "
         "business_name, area_sqm, address, multi_use FROM business_license "
-        "WHERE dong_code IS NOT NULL AND industry_code IS NOT NULL"
+        "WHERE dong_code IS NOT NULL AND industry_code IS NOT NULL ORDER BY license_id"
     ),
 }
 

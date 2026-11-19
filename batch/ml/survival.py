@@ -246,7 +246,7 @@ def drop_temporary(licenses: pd.DataFrame) -> pd.DataFrame:
     if "business_name" not in licenses:
         return licenses
     name = licenses["business_name"].astype("string").fillna("")
-    hit = name.str.contains("|".join(TEMPORARY_KEYWORDS), regex=True, na=False)
+    hit = name.str.contains("|".join(TEMPORARY_KEYWORDS) + r"|pop[\s-]?up", case=False, regex=True, na=False)
     return licenses[~hit.to_numpy()]
 
 
@@ -261,21 +261,40 @@ def _groups(keys: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.nd
     return uniq, lo, hi, order
 
 
-def fill_area(area: pd.Series, industry: pd.Series, seed: int = SEED) -> pd.Series:
+def fill_area(
+    area: pd.Series,
+    industry: pd.Series,
+    seed: int = SEED,
+    *,
+    reference_area: pd.Series | None = None,
+    reference_industry: pd.Series | None = None,
+) -> pd.Series:
     """0 이하 · 빈 면적을 같은 업종의 실제 면적 중 무작위로 채운다(시드 고정).
 
     한 값(업종 중앙값 등)으로 채우면 누수다 — 면적이 빈 비율이 영업 중 0.4% · 폐업 17.4%라
     그 한 값이 곧 '폐업' 표시가 된다(분석계획서 B4 · 기각한 B5a). 업종에 실제 값이 하나도
-    없으면 결측으로 둔다.
+    없으면 결측으로 둔다. 학습/평가에서는 reference_*에 학습 구간만 전달한다.
+    독립적인 변환 호출은 reference_* 생략 시 입력 자체를 표본 풀로 쓴다.
     """
     values = pd.to_numeric(area, errors="coerce").to_numpy(dtype="float64")
-    values = np.where(values > 0, values, np.nan)
+    values = np.where(np.isfinite(values) & (values > 0), values, np.nan)
     out = values.copy()
     rng = np.random.default_rng(seed)
+    if (reference_area is None) != (reference_industry is None):
+        raise ValueError("면적 표본 풀의 값과 업종을 함께 지정해야 합니다")
+    ref_area = area if reference_area is None else reference_area
+    ref_industry = industry if reference_industry is None else reference_industry
+    ref_values = pd.to_numeric(ref_area, errors="coerce").to_numpy(dtype="float64")
+    ref_values = np.where(np.isfinite(ref_values) & (ref_values > 0), ref_values, np.nan)
+    keys, ref_lo, ref_hi, ref_order = _groups(ref_industry.astype(str).to_numpy())
+    pools = {}
+    for key, a, b in zip(keys, ref_lo, ref_hi, strict=True):
+        pool = ref_values[ref_order[a:b]]
+        pools[key] = pool[~np.isnan(pool)]
     uniq, lo, hi, order = _groups(industry.astype(str).to_numpy())
-    for a, b in zip(lo, hi, strict=True):
+    for key, a, b in zip(uniq, lo, hi, strict=True):
         idx = order[a:b]
-        pool = values[idx][~np.isnan(values[idx])]
+        pool = pools.get(key, np.array([]))
         missing = idx[np.isnan(values[idx])]
         if len(pool) and len(missing):
             out[missing] = rng.choice(pool, size=len(missing))
@@ -318,7 +337,10 @@ def store_features(labels: pd.DataFrame, all_licenses: pd.DataFrame) -> pd.DataF
     """labels에 STORE 칼럼을 붙여 돌려준다. 원천 칼럼이 없으면 그 피처는 전부 결측이다."""
     out = pd.DataFrame(index=labels.index)
     if "area_sqm" in labels:
-        out["log_area"] = np.log1p(fill_area(labels["area_sqm"], labels["industry_code"]))
+        # 채움은 시간 분할 후 학습 구간으로만 한다. 여기서 전체 레이블을 표본 풀로 쓰면
+        # 검증/테스트 면적의 분포가 학습 피처로 들어간다.
+        area = pd.to_numeric(labels["area_sqm"], errors="coerce")
+        out["log_area"] = np.log1p(area.where(np.isfinite(area) & (area > 0)))
     else:
         out["log_area"] = np.nan
     if "business_name" in labels:
@@ -343,6 +365,23 @@ def store_features(labels: pd.DataFrame, all_licenses: pd.DataFrame) -> pd.DataF
         out["is_multi_use"] = pd.to_numeric(mapped, errors="coerce")
     else:
         out["is_multi_use"] = np.nan
+    return out
+
+
+def fill_store_area(frame: pd.DataFrame, reference: pd.DataFrame) -> pd.DataFrame:
+    """학습 구간의 실제 면적만으로 결측을 채운다. 원천 면적 칼럼은 보존한다."""
+    if "area_sqm" not in frame:
+        return frame
+    out = frame.copy()
+    out["log_area"] = np.log1p(
+        fill_area(
+            frame["area_sqm"],
+            frame["industry_code"],
+            seed=SEED,
+            reference_area=reference["area_sqm"],
+            reference_industry=reference["industry_code"],
+        )
+    )
     return out
 
 
@@ -613,24 +652,38 @@ def train(
             everything[everything["open_date"] >= pd.Timestamp(START_DATE)], min_stores
         )
     data = attach_features(everything[everything["industry_code"].isin(covered)], panel, licenses)
-    va = data[data["open_year"] == VALID_YEAR]
-    te = data[data["open_year"] > VALID_YEAR]
+    va_raw = data[data["open_year"] == VALID_YEAR]
+    te_raw = data[data["open_year"] > VALID_YEAR]
 
     def train_part(start: date) -> pd.DataFrame:
         return data[(data["open_year"] <= TRAIN_LAST_YEAR) & (data["open_date"] >= pd.Timestamp(start))]
 
-    tr0 = train_part(starts[0])
-    if min(len(tr0), len(va), len(te)) == 0:
-        sizes = f"학습 {len(tr0)} · 검증 {len(va)} · 테스트 {len(te)}"
+    tr0_raw = train_part(starts[0])
+    if min(len(tr0_raw), len(va_raw), len(te_raw)) == 0:
+        sizes = f"학습 {len(tr0_raw)} · 검증 {len(va_raw)} · 테스트 {len(te_raw)}"
         raise ValueError(f"개업 연도 분할에 빈 구간이 있다({sizes})")
+    tr0 = fill_store_area(tr0_raw, tr0_raw)
+    va0 = fill_store_area(va_raw, tr0_raw)
 
-    search = [_search_one(tr0, va, d, s, starts[0]) for d in DISTRIBUTIONS for s in SCALES]
+    search = [_search_one(tr0, va0, d, s, starts[0]) for d in DISTRIBUTIONS for s in SCALES]
     first = min(search, key=lambda s: s["valid_nloglik"])
     for start in starts[1:]:
-        search.append(_search_one(train_part(start), va, first["distribution"], first["scale"], start))
+        reference = train_part(start)
+        search.append(
+            _search_one(
+                fill_store_area(reference, reference),
+                fill_store_area(va_raw, reference),
+                first["distribution"],
+                first["scale"],
+                start,
+            )
+        )
     best = min(search, key=lambda s: s["valid_nloglik"])
     start = date.fromisoformat(best["train_start"])
-    tr = train_part(start)
+    reference = train_part(start)
+    tr = fill_store_area(reference, reference)
+    va = fill_store_area(va_raw, reference)
+    te = fill_store_area(te_raw, reference)
 
     mu_test = _mu(best["booster"], te)
     metrics: dict[str, Any] = {
@@ -655,6 +708,7 @@ def train(
             "scale": best["scale"],
             "rounds": best["rounds"],
         },
+        "area_imputation": {"reference_split": "train", "reference_rows": len(reference), "seed": SEED},
         "test": evaluate(te, mu_test, best["distribution"], best["scale"]),
         # 테스트(2024년 이후 개업)는 3년이 안 지나 3년 생존 확률은 검증 코호트(2023년 개업)로 본다.
         # 검증은 분포 · 폭 선택에 쓰였으므로 약간 낙관적인 값이다
@@ -666,6 +720,8 @@ def train(
         metrics["baselines_test"] = _baselines(tr, te)
 
     full = data[data["open_date"] >= pd.Timestamp(start)]
+    # 모델 선택과 테스트 평가가 끝난 뒤의 운영 모델은 전 기간으로 다시 학습한다.
+    full = fill_store_area(full, full)
     final = _fit(full, None, best["distribution"], best["scale"], best["rounds"])
     return SurvivalModel(final, best["distribution"], best["scale"], covered, obs_end, metrics)
 
