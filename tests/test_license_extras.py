@@ -53,7 +53,11 @@ def test_name_and_address_keep_source_text():
     assert (name, address) == ("첼로Ⅱ노래연습장", "서울 대명길 22  (명륜2가)")
 
 
-def test_db_columns_and_schema_line_up():
+def test_db_columns_line_up():
     assert DB_COLUMNS == CORE_COLUMNS + EXTRA_COLUMNS
-    assert _schema().names == DB_COLUMNS
     assert len(extra_values({})) == len(EXTRA_COLUMNS)
+
+
+def test_parquet_schema_matches_db_columns():
+    pytest.importorskip("pyarrow")  # 기본 CI에는 없다. ci-batch가 돌린다
+    assert _schema().names == DB_COLUMNS
