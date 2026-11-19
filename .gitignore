@@ -60,6 +60,7 @@ models/
 !/batch/pipeline/indicators.py
 !/batch/pipeline/license_mapping.py
 !/batch/pipeline/licenses.py
+!/batch/pipeline/license_store_fields.py
 !/batch/pipeline/rent.py
 
 # 이번 작업에서 생성한 로컬 검증·설치 보조 파일 (파일은 로컬에 유지).
