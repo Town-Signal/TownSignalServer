@@ -32,6 +32,7 @@
 
 import csv
 import math
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -306,22 +307,26 @@ def brand_key(names: pd.Series) -> pd.Series:
 
     TODO(가정): '카페' · '치킨' 같은 일반 낱말도 한 브랜드로 묶인다. 가맹 브랜드 목록이 생기면 바꾼다.
     """
-    first = names.astype("string").fillna("").str.strip().str.split().str[0]
-    return first.fillna("").astype(str)
+    normalized = names.astype("string").fillna("").map(lambda s: unicodedata.normalize("NFKC", s))
+    first = normalized.str.strip().str.split().str[0].fillna("")
+    first = first.str.replace(r"[^\w가-힣]", "", regex=True)
+    return first.where(first.str.len() >= 2, "").astype(str)
 
 
 def brand_prior(all_licenses: pd.DataFrame, queries: pd.DataFrame) -> np.ndarray:
-    """queries(brand_key · ref)마다 같은 상호로 ref 이전에 문 연 점포 수. 상호가 없으면 결측."""
+    """queries(industry_code · brand_key · ref)마다 같은 업종·상호의 이전 점포 수(B6)."""
     if "business_name" not in all_licenses:
         return np.full(len(queries), np.nan)
     lic = all_licenses.dropna(subset=["open_date"])
-    keys = brand_key(lic["business_name"]).to_numpy()
+    brand = brand_key(lic["business_name"]).to_numpy()
+    keys = np.where(brand != "", lic["industry_code"].astype(str).to_numpy() + "|" + brand, "")
     opened = _days(lic["open_date"])
     uniq, lo, hi, order = _groups(keys)
     table = {k: np.sort(opened[order[a:b]]) for k, a, b in zip(uniq, lo, hi, strict=True) if k}
 
     ref = _days(queries["ref"])
-    qkeys = queries["brand_key"].to_numpy()
+    qbrand = queries["brand_key"].to_numpy()
+    qkeys = np.where(qbrand != "", queries["industry_code"].astype(str).to_numpy() + "|" + qbrand, "")
     out = np.full(len(queries), np.nan)
     quniq, qlo, qhi, qorder = _groups(qkeys)
     for k, a, b in zip(quniq, qlo, qhi, strict=True):
@@ -347,6 +352,7 @@ def store_features(labels: pd.DataFrame, all_licenses: pd.DataFrame) -> pd.DataF
         queries = pd.DataFrame(
             {
                 "brand_key": brand_key(labels["business_name"]).to_numpy(),
+                "industry_code": labels["industry_code"].astype(str).to_numpy(),
                 "ref": labels["open_date"].to_numpy(),
             }
         )
@@ -355,7 +361,7 @@ def store_features(labels: pd.DataFrame, all_licenses: pd.DataFrame) -> pd.DataF
         out["log_brand_prior"] = np.nan
     if "address" in labels:
         address = labels["address"].astype("string").fillna("")
-        found = address.str.contains("지하|지층", regex=True, na=False)
+        found = address.str.contains(r"지하|지층|\bB\d|비\d층", case=False, regex=True, na=False)
         out["is_basement"] = np.where(address.str.len() > 0, found.astype(float), np.nan)
     else:
         out["is_basement"] = np.nan

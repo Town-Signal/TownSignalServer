@@ -386,6 +386,7 @@ def test_brand_prior_counts_only_earlier_openings():
     queries = pd.DataFrame(
         {
             "brand_key": ["김밥천국", "김밥천국", ""],
+            "industry_code": ["CS100001"] * 3,
             "ref": [pd.Timestamp("2022-01-01"), pd.Timestamp("2025-01-01"), pd.Timestamp("2025-01-01")],
         }
     )
@@ -453,3 +454,22 @@ def test_drop_temporary_matches_b9_english_popup_rule():
     lic = licenses_with_store()
     lic.loc[2, "business_name"] = "Summer POP-UP"
     assert "Summer POP-UP" not in survival.drop_temporary(lic)["business_name"].tolist()
+
+
+def test_brand_prior_keeps_industries_separate_and_normalizes_names():
+    lic = pd.DataFrame(
+        {
+            "industry_code": ["A", "B", "A"],
+            "business_name": ["Ｃａｆｅ! 강남점", "Cafe 강남점", "Cafe 종로점"],
+            "open_date": pd.to_datetime(["2020-01-01", "2019-01-01", "2022-01-01"]),
+        }
+    )
+    q = pd.DataFrame({"industry_code": ["A"], "brand_key": ["Cafe"], "ref": pd.to_datetime(["2021-01-01"])})
+    assert survival.brand_prior(lic, q).tolist() == [1.0]
+    assert survival.brand_key(pd.Series(["Ｃａｆｅ! 강남점", "가", None])).tolist() == ["Cafe", "", ""]
+
+
+def test_basement_recognizes_source_address_variants():
+    lic = licenses_with_store().iloc[:3].copy()
+    lic["address"] = ["주소 B1", "주소 비1층", "주소 지층"]
+    assert survival.store_features(lic, lic)["is_basement"].tolist() == [1.0, 1.0, 1.0]
