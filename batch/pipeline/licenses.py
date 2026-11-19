@@ -159,7 +159,7 @@ def _schema():
             pa.field("close_date", pa.date32()),
             pa.field("status", pa.string()),
             pa.field("business_name", pa.string()),
-            pa.field("area_sqm", pa.decimal128(12, 2)),
+            pa.field("area_sqm", pa.decimal128(10, 2)),
             pa.field("address", pa.string()),
             pa.field("multi_use", pa.bool_()),
         ]
