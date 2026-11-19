@@ -26,7 +26,7 @@ python -m batch.jobs.load_dev_fixtures --force    # 더미가 아닌 행이 있�
 | `dummy_dongs.json` | 행정동 54개. dong_code는 `{구코드}9{nn}` 더미 코드, 이름 · geo_code는 TownSignalFE `public/geo`와 같음 |
 | `dummy_industries.json` | 업종 7개(외식업 3 · 서비스업 2 · 소매업 2) |
 | `dummy_rent.json` | 조사 상권 46개의 ㎡당 월세(천원). 자치구 값은 로더가 상권 평균으로 계산 |
-| `dummy_support_programs.json` | 지원사업 11개(행마다 `case`에 어떤 경우인지 적음) + 추출 검증 기록 8개 |
+| `dummy_support_programs.json` | 지원사업 12개(행마다 `case`에 어떤 경우인지 적음) + 추출 검증 기록 8개 |
 | `dummy_special_cases.json` | 필수 경우를 어느 동 · 업종 조합에 둘지 |
 
 매출 · 점포 · 인구 · 예측 원값은 `batch/dev/fixtures.py`가 `random.Random("townsignal-dev:…")`로 결정적으로 만든다.
@@ -38,7 +38,7 @@ python -m batch.jobs.load_dev_fixtures --force    # 더미가 아닌 행이 있�
 | --- | --- |
 | district · dong · industry | 25 · 54 · 7 |
 | commercial_market · district_rent | 46 · 25 |
-| support_program · program_verification | 11 · 8 |
+| support_program · program_verification | 12 · 8 |
 | store_quarterly · sales_quarterly · population_quarterly | 2,968 · 2,888 · 432 (8분기 20233 ~ 20252) |
 | prediction | 413 (xgb_v1 361 + mlp_v1 52) |
 | summary_cache | 50 |
@@ -65,4 +65,4 @@ python -m batch.jobs.load_dev_fixtures --force    # 더미가 아닌 행이 있�
 | 서빙 외 모델 | mlp_v1 — 한식음식점 52행 |
 | geo_code 없는 동 · 이름 같은 동 | 위례동(2015 신설) · 신사동(강남구 · 관악구) |
 
-나이 27 · 경력 0 · 조리기능사 · 한식음식점 기준 지원금 합계: 일반 구 2,400만, 관악 3,200만, 마포 2,900만, 금천 3,300만, 성동 3,000만, 강남 2,400만.
+나이 27 · 경력 0 · 조리기능사 · 한식음식점 기준 지원금 합계: 일반 구 2,400만, 관악 3,200만, 마포 2,900만, 금천 3,300만, 성동 3,000만, 강남 2,400만. 거주 구를 동작구로 넣으면 동작구만 +500만(거주 조건 더미 사업), 안 넣으면 그대로다.

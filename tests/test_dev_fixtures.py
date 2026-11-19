@@ -14,6 +14,7 @@ from common.scoring import percent_rank, total_score
 DOBONG, GEUMCHEON, GANGBUK, GWANAK, MAPO, SEONGDONG, GANGNAM, JONGNO = (
     "11320", "11545", "11305", "11620", "11440", "11200", "11680", "11110",
 )
+DONGJAK = "11590"
 CHEONGUN, HOEGI, BANGHAK3, GONGNEUNG2, MANGWON1, GASAN = (
     "11110901", "11230901", "11320901", "11350901", "11440903", "11545901",
 )
@@ -25,7 +26,7 @@ EXPECTED_COUNTS = {
     "industry": 7,
     "commercial_market": 46,
     "district_rent": 25,
-    "support_program": 11,
+    "support_program": 12,
     "program_verification": 8,
     "store_quarterly": 2_968,
     "sales_quarterly": 2_888,
@@ -139,9 +140,12 @@ def test_program_cases(t):
     assert len({r["amount_max"] for r in national_exclusive}) == 2
     assert any(r["district_code"] is None and not r["is_exclusive"] for r in rows)
     district_only = {r["district_code"] for r in rows if r["district_code"]}
-    assert district_only == {GWANAK, MAPO, GEUMCHEON, SEONGDONG, GANGNAM}
+    assert district_only == {GWANAK, MAPO, GEUMCHEON, SEONGDONG, GANGNAM, DONGJAK}
     assert sum(r["verified_by"] is None for r in rows) == 1
-    assert sum(r["apply_end"] is None for r in rows) == 1
+    assert sum(r["apply_end"] is None for r in rows) == 2
+    # 거주 조건이 있는 구 전용 사업 1건(2026-11-17)
+    residence = [r for r in rows if "residence_district_code" in str(r["eligibility"])]
+    assert [(r["district_code"], r["is_exclusive"]) for r in residence] == [(DONGJAK, False)]
     assert any(r["apply_end"] is not None and r["apply_end"].year == 2025 for r in rows)  # 마감 공고
     assert all(r["name"].startswith("[더미") for r in rows)
 

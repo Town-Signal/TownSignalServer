@@ -30,6 +30,8 @@ class Applicant:
     certificates: tuple[str, ...] = ()
     industry_code: str | None = None
     industry_category: str | None = None  # industry.category (외식업 · 서비스업 · 소매업)
+    # 거주 자치구 코드 5자리(선택 입력, 2026-11-17). None이면 거주 조건은 거짓이다(해석 불가가 아님)
+    residence_district_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -53,7 +55,7 @@ class _Unmatchable(Exception):
 # 필드 → 값의 종류 (가정, 7.3)
 _NUMBER_FIELDS = {"age", "career_years", "capital"}
 _LIST_FIELDS = {"certificates"}
-_STRING_FIELDS = {"industry_code", "industry_category"}
+_STRING_FIELDS = {"industry_code", "industry_category", "residence_district_code"}
 
 _NUMBER_OPS = {
     "==": lambda a, b: a == b,
