@@ -426,9 +426,10 @@ def test_predict_next_uses_reference_store_values(model, panel, licenses):
     captured = {}
     real = survival._mu
 
-    def spy(booster, df):
+    def spy(booster, df, features=None):
         captured["df"] = df
-        return real(booster, df)
+        captured["features"] = features
+        return real(booster, df, features)
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(survival, "_mu", spy)
@@ -438,6 +439,8 @@ def test_predict_next_uses_reference_store_values(model, panel, licenses):
     assert df["log_area"].eq(np.log1p(survival.REFERENCE_AREA_SQM)).all()
     assert df["log_brand_prior"].eq(0.0).all() and df["is_basement"].eq(0.0).all()
     assert df["is_multi_use"].eq(0.0).all()
+    # 좌표가 없는 인허가로 학습한 모델은 위치 피처를 쓰지 않는다
+    assert captured["features"] == survival.FEATURES
 
 
 def test_fill_area_never_samples_validation_or_test_values():
