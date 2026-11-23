@@ -93,6 +93,11 @@ class BusinessLicense(Base):
     __table_args__ = (
         CheckConstraint("close_date IS NULL OR close_date >= open_date", name="chk_license_dates"),
         CheckConstraint("area_sqm IS NULL OR area_sqm > 0", name="chk_license_area"),
+        CheckConstraint(
+            "(lon IS NULL) = (lat IS NULL)"
+            " AND (lon IS NULL OR (lon BETWEEN 126.6 AND 127.3 AND lat BETWEEN 37.3 AND 37.75))",
+            name="chk_license_coord",
+        ),
         Index("idx_license_dong_ind", "dong_code", "industry_code"),
         Index("idx_license_open", "open_date"),
     )
@@ -108,3 +113,6 @@ class BusinessLicense(Base):
     area_sqm: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))  # 소재지 → 시설 → 시설총규모 순
     address: Mapped[str | None] = mapped_column(String(300))  # 도로명주소, 없으면 지번주소
     multi_use: Mapped[bool | None] = mapped_column(Boolean)  # 다중이용업소여부
+    # 좌표(모델 B 위치 피처) — 원천 EPSG:5174를 WGS84로 바꾼 값. 거리는 batch/ml/spatial.py가 계산한다
+    lon: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))  # 경도
+    lat: Mapped[Decimal | None] = mapped_column(Numeric(8, 6))  # 위도
