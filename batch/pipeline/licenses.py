@@ -10,6 +10,9 @@ data/seed/license_to_industry_mapping.csv: coverage 100행 + 종류·업태별 m
 모든 기간·영업상태·원문 칼럼을 enriched Parquet에 보존한다. DB용 Parquet는 인허가당
 한 행이다. 같은 키의 핵심 값이 같을 때만 중복을 묶고 모든 원본 위치를 기록한다.
 미분류/좌표 결측은 NULL, 잘못된 폐업일은 NULL과 오류 플래그로 보존(생존학습 제외).
+행정동 공간조인에 쓰는 좌표는 business_license.lon · lat(WGS84)으로 함께 적재한다(모델 B 위치 피처).
+점포 칼럼 4개(business_name · area_sqm · address · multi_use)는 아직 이 전처리가 쓰지 않는다 —
+batch/pipeline/license_store_fields.py가 따로 채운다.
 개업일·식별키 오류/핵심 값이 다른 중복은 보류하고 전체 적재를 중단한다.
 주소의 법정동명/법정동코드를 행정동으로 가정하지 않는다. 좌표가 없는 주소는 보존하고
 미매칭으로 남긴다. 외부 지오코딩 호출은 하지 않는다. 경계 도형은 보정하지 않는다.
@@ -43,8 +46,12 @@ from batch.pipeline.raw_conversion import SOURCE_ROW, fingerprint
 from batch.pipeline.raw_sources import SERVER_ROOT
 
 logger = logging.getLogger(__name__)
-DB_COLUMNS = ["license_id", "dong_code", "industry_code", "open_date", "close_date", "status"]
+DB_COLUMNS = ["license_id", "dong_code", "industry_code", "open_date", "close_date", "status", "lon", "lat"]
 SOURCE_CRS = 5174
+TARGET_CRS = 4326  # business_license.lon · lat(WGS84). 미터 거리는 batch/ml/spatial.py가 다시 바꾼다
+# 서울 바깥 좌표는 원천 오류로 보고 적재하지 않는다(행정동 공간조인도 경계 밖이면 미매칭이다)
+LON_RANGE = (126.6, 127.3)
+LAT_RANGE = (37.3, 37.75)
 REQUIRED = [
     "개방자치단체코드",
     "관리번호",
@@ -121,6 +128,8 @@ def _schema():
             pa.field("open_date", pa.date32(), nullable=False),
             pa.field("close_date", pa.date32()),
             pa.field("status", pa.string()),
+            pa.field("lon", pa.float64()),
+            pa.field("lat", pa.float64()),
         ]
     )
 
@@ -163,6 +172,34 @@ def load_boundary(path: Path, masters: dict):
     if any(row.ADSTRD_NM != expected[row.ADSTRD_CD] for row in frame.itertuples()):
         raise ValueError("행정동 경계와 마스터 명칭이 다릅니다")
     return frame[["ADSTRD_CD", "geometry"]].copy()
+
+
+def wgs84(frame) -> tuple[list, list]:
+    """좌표정보(X · Y)(EPSG:5174) → WGS84 경위도. 결측 · 0 · 서울 범위 밖은 None.
+
+    행정동 공간조인에 쓰는 좌표를 그대로 적재한다(모델 B 위치 피처). 외부 지오코딩은 하지 않는다.
+    """
+    import numpy as np
+    import pandas as pd
+    from pyproj import Transformer
+
+    x = pd.to_numeric(frame["좌표정보(X)"].str.strip(), errors="coerce")
+    y = pd.to_numeric(frame["좌표정보(Y)"].str.strip(), errors="coerce")
+    valid = (np.isfinite(x) & np.isfinite(y) & x.ne(0) & y.ne(0)).to_numpy()
+    lons: list = [None] * len(frame)
+    lats: list = [None] * len(frame)
+    if not valid.any():
+        return lons, lats
+    transformer = Transformer.from_crs(SOURCE_CRS, TARGET_CRS, always_xy=True)
+    lon, lat = transformer.transform(x.to_numpy()[valid], y.to_numpy()[valid])
+    inside = (
+        (lon >= LON_RANGE[0]) & (lon <= LON_RANGE[1]) & (lat >= LAT_RANGE[0]) & (lat <= LAT_RANGE[1])
+    )
+    for position, index in enumerate(np.flatnonzero(valid)):
+        if inside[position]:
+            lons[index] = round(float(lon[position]), 6)
+            lats[index] = round(float(lat[position]), 6)
+    return lons, lats
 
 
 def spatial_codes(frame, boundary, districts: dict) -> tuple[list, list]:
@@ -297,6 +334,7 @@ def _transform(files, boundary, masters, coverage, rules, staging, report, batch
                             ["좌표정보(X)", "좌표정보(Y)", "지번주소", "도로명주소"]
                         ).to_pandas()
                         dongs, spatial_reasons = spatial_codes(frame, boundary, districts)
+                        lons, lats = wgs84(frame)
                         transformed, extra = [], []
                         for i, row in enumerate(rows):
                             counts["input_rows"] += 1
@@ -345,7 +383,16 @@ def _transform(files, boundary, masters, coverage, rules, staging, report, batch
                             db_row = dict(
                                 zip(
                                     DB_COLUMNS,
-                                    [lid, dongs[i], industry, opening, closing, status],
+                                    [
+                                        lid,
+                                        dongs[i],
+                                        industry,
+                                        opening,
+                                        closing,
+                                        status,
+                                        lons[i],
+                                        lats[i],
+                                    ],
                                     strict=True,
                                 )
                             )
@@ -530,7 +577,7 @@ def _transform(files, boundary, masters, coverage, rules, staging, report, batch
 def load_license_table(conn, report, masters):
     """기존 지표/마스터를 변경하지 않는다. 동일한 마스터를 확인하고 인허가만 적재한다."""
     import pyarrow.parquet as pq
-    from sqlalchemy import Date, MetaData, String, text
+    from sqlalchemy import Date, MetaData, Numeric, String, text
 
     if conn.dialect.name != "postgresql" or conn.dialect.driver != "psycopg" or not conn.in_transaction():
         raise ValueError("열린 PostgreSQL+psycopg 트랜잭션이 필요합니다")
@@ -548,7 +595,12 @@ def load_license_table(conn, report, masters):
         raise ValueError("business_license 기본키 불일치")
     for field in _schema():
         column = table.c[field.name]
-        dtype = Date if field.name.endswith("_date") else String
+        if field.name.endswith("_date"):
+            dtype: type = Date
+        elif field.name in ("lon", "lat"):
+            dtype = Numeric  # 좌표는 NUMERIC(9,6) · (8,6)
+        else:
+            dtype = String
         if not isinstance(column.type, dtype) or column.nullable != field.nullable:
             raise ValueError(f"DB 타입/NULL 규칙 불일치: {field.name}")
     mark = report["output"]

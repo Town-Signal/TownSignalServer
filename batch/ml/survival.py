@@ -41,7 +41,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from batch.ml import sales
+from batch.ml import sales, spatial
 from common.constants import DEFAULT_AREA_SQM
 
 QUANTILES = (0.1, 0.5, 0.9)
@@ -82,6 +82,10 @@ REFERENCE_AREA_SQM = DEFAULT_AREA_SQM  # 전 조합 예측('지금 개업하는 
 TEMPORARY_KEYWORDS = ("한시", "팝업", "축제", "페스티벌", "박람회", "주민자치", "먹거리장터")
 NUMERIC = [*sales.NUMERIC, *HISTORY, *STORE]
 FEATURES = [*sales.CATEGORICAL, *NUMERIC]
+# 위치 피처(batch.ml.spatial)는 business_license에 좌표가 있을 때만 붙인다. 좌표가 없으면 피처 목록에
+# 넣지 않아 좌표 이전 모델과 칼럼 구성이 같다 — colsample_bytree가 칼럼을 뽑으므로 전부 결측인 칼럼을
+# 끼워 두기만 해도 결과가 달라진다
+SPATIAL = spatial.SPATIAL
 
 PARAMS: dict[str, Any] = {
     "objective": "survival:aft",
@@ -98,6 +102,11 @@ NUM_BOOST_ROUND = 2000
 EARLY_STOPPING = 50
 
 ObsEnd = date | dict[str, date] | None
+
+
+def feature_names(df: pd.DataFrame) -> list[str]:
+    """이 데이터프레임으로 학습·예측할 피처 목록. 위치 피처는 칼럼이 있을 때만 들어간다."""
+    return [*FEATURES, *[c for c in SPATIAL if c in df.columns]]
 
 
 # ---------- 커버리지 표 ----------
@@ -169,6 +178,7 @@ def label_frame(
     df["qidx"] = df["open_date"].dt.year * 4 + (df["open_date"].dt.month - 1) // 3
     columns = [*sales.KEYS, "open_date", "obs_end", "duration_months", "event", "open_year", "qidx"]
     columns += [c for c in STORE_COLUMNS if c in df]  # 있을 때만 — 점포 피처는 없으면 결측으로 간다
+    columns += [c for c in spatial.COORD_COLUMNS if c in df]  # 좌표도 같다(위치 피처)
     out = df[columns].reset_index(drop=True)
     out.attrs["obs_end"] = label
     return out
@@ -412,6 +422,12 @@ def attach_features(labels: pd.DataFrame, panel: pd.DataFrame, all_licenses: pd.
     store = store_features(df, all_licenses)
     for c in STORE:
         df[c] = store[c].to_numpy()
+    if spatial.has_coordinates(all_licenses) and spatial.has_coordinates(df):
+        place = spatial.spatial_features(
+            all_licenses, df[["industry_code", "lon", "lat"]].assign(ref=df["open_date"])
+        )
+        for c in SPATIAL:
+            df[c] = place[c].to_numpy()
     return _with_categories(df, panel)
 
 
@@ -464,10 +480,10 @@ def survival_prob(mu: np.ndarray, distribution: str, scale: float, months: float
 
 
 # ---------- 학습 ----------
-def _dmatrix(df: pd.DataFrame):
+def _dmatrix(df: pd.DataFrame, features: list[str] | None = None):
     import xgboost as xgb
 
-    d = xgb.DMatrix(df[FEATURES], enable_categorical=True)
+    d = xgb.DMatrix(df[features or FEATURES], enable_categorical=True)
     lower = df["duration_months"].to_numpy(dtype=float)
     upper = np.where(df["event"].to_numpy() == 1, lower, np.inf)
     d.set_float_info("label_lower_bound", lower)
@@ -544,15 +560,20 @@ def evaluate(df: pd.DataFrame, mu: np.ndarray, distribution: str, scale: float) 
 
 
 def _fit(
-    train: pd.DataFrame, valid: pd.DataFrame | None, distribution: str, scale: float, rounds: int | None
+    train: pd.DataFrame,
+    valid: pd.DataFrame | None,
+    distribution: str,
+    scale: float,
+    rounds: int | None,
+    features: list[str] | None = None,
 ):
     import xgboost as xgb
 
     params = {**PARAMS, "aft_loss_distribution": distribution, "aft_loss_distribution_scale": scale}
-    dtrain = _dmatrix(train)
+    dtrain = _dmatrix(train, features)
     if valid is None:
         return xgb.train(params, dtrain, num_boost_round=rounds or 100, verbose_eval=False)
-    dvalid = _dmatrix(valid)
+    dvalid = _dmatrix(valid, features)
     return xgb.train(
         params,
         dtrain,
@@ -563,10 +584,10 @@ def _fit(
     )
 
 
-def _mu(booster, df: pd.DataFrame) -> np.ndarray:
+def _mu(booster, df: pd.DataFrame, features: list[str] | None = None) -> np.ndarray:
     import xgboost as xgb
 
-    d = xgb.DMatrix(df[FEATURES], enable_categorical=True)
+    d = xgb.DMatrix(df[features or FEATURES], enable_categorical=True)
     kwargs = {"iteration_range": (0, booster.best_iteration + 1)} if _has_best(booster) else {}
     return booster.predict(d, output_margin=True, **kwargs)
 
@@ -620,11 +641,12 @@ class SurvivalModel:
     covered: list[str]
     obs_end: ObsEnd = None
     metrics: dict[str, Any] = field(default_factory=dict)
+    features: list[str] = field(default_factory=lambda: list(FEATURES))
 
 
-def _search_one(tr, va, dist, scale, start) -> dict[str, Any]:
-    booster = _fit(tr, va, dist, scale, None)
-    c = harrell_c(va["duration_months"], np.exp(_mu(booster, va)), va["event"])
+def _search_one(tr, va, dist, scale, start, features=None) -> dict[str, Any]:
+    booster = _fit(tr, va, dist, scale, None, features)
+    c = harrell_c(va["duration_months"], np.exp(_mu(booster, va, features)), va["event"])
     return {
         "train_start": str(start),
         "distribution": dist,
@@ -658,6 +680,7 @@ def train(
             everything[everything["open_date"] >= pd.Timestamp(START_DATE)], min_stores
         )
     data = attach_features(everything[everything["industry_code"].isin(covered)], panel, licenses)
+    names = feature_names(data)
     va_raw = data[data["open_year"] == VALID_YEAR]
     te_raw = data[data["open_year"] > VALID_YEAR]
 
@@ -671,7 +694,7 @@ def train(
     tr0 = fill_store_area(tr0_raw, tr0_raw)
     va0 = fill_store_area(va_raw, tr0_raw)
 
-    search = [_search_one(tr0, va0, d, s, starts[0]) for d in DISTRIBUTIONS for s in SCALES]
+    search = [_search_one(tr0, va0, d, s, starts[0], names) for d in DISTRIBUTIONS for s in SCALES]
     first = min(search, key=lambda s: s["valid_nloglik"])
     for start in starts[1:]:
         reference = train_part(start)
@@ -682,6 +705,7 @@ def train(
                 first["distribution"],
                 first["scale"],
                 start,
+                names,
             )
         )
     best = min(search, key=lambda s: s["valid_nloglik"])
@@ -691,10 +715,17 @@ def train(
     va = fill_store_area(va_raw, reference)
     te = fill_store_area(te_raw, reference)
 
-    mu_test = _mu(best["booster"], te)
+    mu_test = _mu(best["booster"], te, names)
     metrics: dict[str, Any] = {
         "obs_end": everything.attrs["obs_end"],
         "covered_industries": covered,
+        "features": names,
+        "spatial": {
+            "used": [c for c in SPATIAL if c in names],
+            "coverage": (
+                float(data["lon"].notna().mean()) if "lon" in data else None
+            ),  # 좌표가 있는 학습 행 비율
+        },
         "rows": {
             "labels": int((everything["open_date"] >= pd.Timestamp(start)).sum()),
             "covered": int((data["open_date"] >= pd.Timestamp(start)).sum()),
@@ -719,7 +750,7 @@ def train(
         # 테스트(2024년 이후 개업)는 3년이 안 지나 3년 생존 확률은 검증 코호트(2023년 개업)로 본다.
         # 검증은 분포 · 폭 선택에 쓰였으므로 약간 낙관적인 값이다
         "valid_survival_prob_36m": prob_metrics(
-            va, _mu(best["booster"], va), best["distribution"], best["scale"], 36
+            va, _mu(best["booster"], va, names), best["distribution"], best["scale"], 36
         ),
     }
     if baselines:
@@ -728,8 +759,8 @@ def train(
     full = data[data["open_date"] >= pd.Timestamp(start)]
     # 모델 선택과 테스트 평가가 끝난 뒤의 운영 모델은 전 기간으로 다시 학습한다.
     full = fill_store_area(full, full)
-    final = _fit(full, None, best["distribution"], best["scale"], best["rounds"])
-    return SurvivalModel(final, best["distribution"], best["scale"], covered, obs_end, metrics)
+    final = _fit(full, None, best["distribution"], best["scale"], best["rounds"], names)
+    return SurvivalModel(final, best["distribution"], best["scale"], covered, obs_end, metrics, names)
 
 
 def predict_next(model: SurvivalModel, panel: pd.DataFrame, licenses: pd.DataFrame) -> pd.DataFrame:
@@ -760,8 +791,13 @@ def predict_next(model: SurvivalModel, panel: pd.DataFrame, licenses: pd.DataFra
     future["log_brand_prior"] = math.log1p(0)
     future["is_basement"] = 0.0
     future["is_multi_use"] = 0.0
+    if any(c in model.features for c in SPATIAL):
+        # 예측 행은 좌표가 없다 — 같은 행정동 · 업종 영업 점포들 위치의 중앙값을 쓴다(batch.ml.spatial)
+        place = spatial.representative_features(licenses, future[sales.KEYS], model.obs_end)
+        for c in SPATIAL:
+            future[c] = place[c].to_numpy()
     df = _with_categories(future, panel)
-    mu = _mu(model.booster, df)
+    mu = _mu(model.booster, df, model.features)
     months = quantile_months(mu, model.distribution, model.scale)
     out = pd.DataFrame(
         {

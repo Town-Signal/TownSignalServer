@@ -92,8 +92,14 @@ CREATE TABLE business_license (                      -- 인허가 원본 LOCALDA
   area_sqm      NUMERIC(10,2),                       -- 소재지면적 → 시설면적 → 시설총규모 순. 모델 B 피처
   address       VARCHAR(300),                        -- 도로명주소, 없으면 지번주소. 지하 판정
   multi_use     BOOLEAN,                             -- 다중이용업소여부
+  lon           NUMERIC(9,6),                        -- 좌표정보(X) → WGS84 경도. 모델 B 위치 피처
+  lat           NUMERIC(8,6),                        -- 좌표정보(Y) → WGS84 위도
   CONSTRAINT chk_license_dates CHECK (close_date IS NULL OR close_date >= open_date),
-  CONSTRAINT chk_license_area  CHECK (area_sqm IS NULL OR area_sqm > 0)
+  CONSTRAINT chk_license_area  CHECK (area_sqm IS NULL OR area_sqm > 0),
+  CONSTRAINT chk_license_coord CHECK (
+    (lon IS NULL) = (lat IS NULL)
+    AND (lon IS NULL OR (lon BETWEEN 126.6 AND 127.3 AND lat BETWEEN 37.3 AND 37.75))
+  )
 );
 CREATE INDEX idx_license_dong_ind ON business_license (dong_code, industry_code);
 CREATE INDEX idx_license_open     ON business_license (open_date);
@@ -101,6 +107,8 @@ CREATE INDEX idx_license_open     ON business_license (open_date);
 -- 짧게 추정됨. 일반 회귀가 아니라 생존분석을 써야 하는 이유.
 -- 점포 칼럼 4개는 모두 NULL 허용이고 채우는 것은 학습 코드가 한다. 빈 면적을 한 값으로
 -- 채워 적재하면 폐업 처리 때 기록이 비는 경향이 미래 정보로 샌다(분석계획서 B4 · B5).
+-- lon · lat은 원천 좌표(EPSG:5174)를 WGS84로 바꾼 값이다. 행정동 공간조인에 이미 쓰던 값이라
+-- 새 원천이 필요 없다. 미터 거리는 batch/ml/spatial.py가 EPSG:5181로 바꿔서 계산한다(실험 B11).
 
 /* =============================================================================
    3. 임대료 테이블 (commercial_market, district_rent)
