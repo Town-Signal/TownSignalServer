@@ -13,6 +13,11 @@
 
 [![중간 발표 표지](docs/presentations/2026-10-20_midterm_cover.jpg)](docs/presentations/README.md)
 
+## 모델 개선 과정
+
+매출 모델은 직전 분기 규칙보다 오차가 -4.8%(첫 학습)에서 +13.2%로, 생존 모델은 C-index가 0.608에서 0.666으로 좋아졌다.
+실험마다 무엇을 바꿨고 무엇을 버렸는지는 [docs/model_improvement.md](docs/model_improvement.md).
+
 ## 한눈에 보기
 
 배치가 서빙 표를 미리 채우고, API는 그 표를 조회해 더하고 빼기만 한다. 그래서 API에는 모델이 없고 응답이 1초 안에 끝난다.
